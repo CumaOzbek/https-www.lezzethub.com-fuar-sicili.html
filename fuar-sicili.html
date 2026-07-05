@@ -1,0 +1,2134 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fuar Sicili — TOBB Fuar Takvimi Platformu</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='9' fill='%23FBF7F0'/%3E%3Cg transform='translate(20,20)'%3E%3Crect x='-11' y='-6.5' width='20' height='13' rx='6.5' fill='none' stroke='%230F3D3E' stroke-width='4' transform='rotate(-20)'/%3E%3Crect x='-9' y='-6.5' width='20' height='13' rx='6.5' fill='none' stroke='%23E8A33D' stroke-width='4' transform='rotate(20)'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#122523;
+    --petrol:#0F3D3E;
+    --petrol-2:#154D4E;
+    --paper:#FBF7F0;
+    --paper-2:#F1EADA;
+    --card:#FFFFFF;
+    --amber:#E8A33D;
+    --amber-deep:#C97F1F;
+    --coral:#E1553B;
+    --coral-light:#FBE4DF;
+    --success:#2F7A4F;
+    --success-light:#E1F0E5;
+    --slate:#5C6D6B;
+    --line: rgba(18,37,35,0.13);
+    --shadow: 0 14px 34px rgba(15,61,62,0.14);
+    --shadow-lg: 0 24px 60px rgba(15,61,62,0.22);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  h1,h2,h3,.display{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    letter-spacing:-0.01em;
+    color:var(--ink);
+    margin:0;
+  }
+  .mono{font-family:'Space Mono',monospace;}
+  a{color:inherit;}
+  button{font-family:'Inter',sans-serif; cursor:pointer;}
+  ::selection{ background:var(--amber); color:var(--ink);}
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    background: var(--petrol);
+    color: var(--paper);
+    padding: 9px 28px;
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:12px; letter-spacing:0.03em;
+  }
+  .topbar .seal-strip{ display:flex; gap:18px; opacity:0.85;}
+  .topbar .seal-strip span{ color: var(--amber);}
+  .topbar .seal-strip span::before{ content:'●'; font-size:6px; margin-right:6px; position:relative; top:-2px;}
+
+  header.mainnav{
+    background: var(--paper);
+    border-bottom: 1px solid var(--line);
+    padding: 16px 28px;
+    display:flex; align-items:center; justify-content:space-between;
+    position:sticky; top:0; z-index:50;
+  }
+  .brand{ display:flex; flex-direction:column; align-items:flex-start; gap:1px; cursor:pointer;}
+  .brand-logo{ width:186px; height:auto; display:block;}
+  .brand-tagline{ font-family:'Inter'; font-weight:500; font-size:10px; letter-spacing:0.09em; color:var(--slate); text-transform:uppercase; padding-left:47px;}
+
+  nav.links{ display:flex; gap:4px; align-items:center;}
+  nav.links button.navbtn{
+    background:none; border:none; padding:9px 14px; font-size:14px; font-weight:600;
+    color:var(--slate); border-radius:8px; transition:all .15s ease;
+  }
+  nav.links button.navbtn:hover{ background:var(--paper-2); color:var(--ink);}
+  nav.links button.navbtn.active{ background:var(--petrol); color:var(--paper);}
+  .navcta{
+    background:var(--coral); color:#fff; border:none; padding:10px 18px;
+    border-radius:9px; font-weight:700; font-size:13.5px; margin-left:8px;
+  }
+  .navcta.secondary{ background:transparent; color:var(--ink); border:1.5px solid var(--ink);}
+  .navcta.subscribe{ background:var(--success-light); color:var(--success);}
+  .navcta.subscribe:hover{ background:var(--success); color:#fff;}
+  .hamburger{ display:none; flex-direction:column; gap:5px; background:none; border:none; padding:8px;}
+  .hamburger span{ width:22px; height:2.5px; background:var(--ink); border-radius:2px;}
+  .mobile-drawer{ display:none; }
+
+  main{ max-width:1180px; margin:0 auto; padding: 0 28px 90px;}
+  .view{ display:none; animation: fadeIn .35s ease; }
+  .view.active{ display:block;}
+  @keyframes fadeIn{ from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:none;} }
+
+  /* ---------- Hero ---------- */
+  .hero{
+    padding: 66px 0 46px; display:grid; grid-template-columns: 1.1fr 0.9fr; gap:56px; align-items:center;
+  }
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:8px; font-size:12px; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--coral); font-weight:700; margin-bottom:18px;
+  }
+  .eyebrow::before{ content:''; width:22px; height:2px; background:var(--coral); border-radius:2px;}
+  .hero h1{ font-size:48px; line-height:1.06; margin-bottom:18px;}
+  .hero p.lede{ font-size:16.5px; color:var(--slate); line-height:1.65; max-width:520px; margin-bottom:28px;}
+  .hero-actions{ display:flex; gap:14px; flex-wrap:wrap;}
+  .btn{
+    border:none; padding:14px 22px; border-radius:10px; font-weight:700; font-size:14px;
+    display:inline-flex; align-items:center; gap:8px; transition:transform .15s ease, box-shadow .15s ease;
+  }
+  .btn:hover{ transform:translateY(-2px);}
+  .btn-primary{ background:var(--coral); color:#fff; box-shadow:0 10px 22px rgba(225,85,59,0.28);}
+  .btn-dark{ background:var(--petrol); color:var(--paper);}
+  .btn-outline{ background:transparent; border:1.5px solid var(--ink); color:var(--ink);}
+  .btn-amber{ background:var(--amber); color:#2b1d05;}
+  .btn-ghost{ background:var(--paper-2); color:var(--ink);}
+  .btn-sm{ padding:9px 14px; font-size:12.5px; border-radius:8px;}
+  .btn:disabled{ opacity:0.5; cursor:not-allowed; transform:none;}
+
+  /* ---------- Signature: badge / access card ---------- */
+  .badge-wrap{ display:flex; justify-content:center; perspective:1200px;}
+  .access-badge{
+    width:100%; max-width:340px; background:var(--card); border-radius:18px;
+    box-shadow: var(--shadow-lg); position:relative; transform:rotate(-3deg);
+    transition:transform .35s ease; overflow:hidden; border:1px solid var(--line);
+  }
+  .access-badge:hover{ transform:rotate(0deg) translateY(-4px);}
+  .access-badge .strap{
+    position:absolute; top:-14px; left:50%; transform:translateX(-50%);
+    width:64px; height:26px; background:var(--petrol); border-radius:4px 4px 0 0;
+  }
+  .access-badge .hole{
+    position:absolute; top:16px; left:50%; transform:translateX(-50%);
+    width:26px; height:8px; background:var(--paper); border-radius:6px; border:2px solid var(--paper-2);
+  }
+  .access-badge .badge-top{
+    background:var(--petrol); color:var(--paper); padding:36px 24px 20px; text-align:center;
+  }
+  .access-badge .badge-top .btitle{ font-family:'Space Grotesk'; font-weight:700; font-size:15px; letter-spacing:0.03em;}
+  .access-badge .badge-top .bsub{ font-size:10.5px; letter-spacing:0.1em; text-transform:uppercase; color:var(--amber); margin-top:4px;}
+  .access-badge .badge-body{ padding:22px 24px 10px;}
+  .access-badge .brow{ display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px dashed var(--line); font-size:12.5px;}
+  .access-badge .brow:last-child{ border-bottom:none;}
+  .access-badge .brow .k{ color:var(--slate); text-transform:uppercase; font-size:10px; letter-spacing:0.06em;}
+  .access-badge .brow .v{ font-weight:700; text-align:right;}
+  .badge-perf{
+    height:0; border-top:2px dashed var(--paper-2); position:relative; margin:14px 0 0;
+  }
+  .badge-perf::before, .badge-perf::after{
+    content:''; position:absolute; top:-8px; width:16px; height:16px; background:var(--paper); border-radius:50%;
+  }
+  .badge-perf::before{ left:-32px;}
+  .badge-perf::after{ right:-32px;}
+  .barcode-strip{ padding:16px 24px 22px; }
+  .barcode{
+    height:44px; border-radius:3px;
+    background: repeating-linear-gradient(90deg, var(--ink) 0px 2px, transparent 2px 5px, var(--ink) 5px 6px, transparent 6px 8px, var(--ink) 8px 11px, transparent 11px 15px, var(--ink) 15px 16px, transparent 16px 20px);
+  }
+  .barcode-num{ font-family:'Space Mono'; font-size:10.5px; text-align:center; margin-top:8px; letter-spacing:0.12em; color:var(--slate);}
+
+  section.strip{ padding:38px 0; border-top:1px solid var(--line);}
+
+  .service-strip{
+    display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+    background: linear-gradient(90deg, var(--petrol), var(--petrol-2));
+    color: var(--paper); border-radius:14px; padding:16px 22px; margin:8px 0 6px;
+  }
+  .service-strip .s-icon{ font-size:22px; flex-shrink:0;}
+  .service-strip .s-text{ flex:1; min-width:220px;}
+  .service-strip .s-text b{ font-family:'Space Grotesk'; font-size:14.5px;}
+  .service-strip .s-text span{ display:block; font-size:12px; color:#C9D6D6; margin-top:2px;}
+  .service-strip .s-price{ font-family:'Space Mono'; font-size:15px; color:var(--amber); font-weight:700; white-space:nowrap;}
+  @media (max-width:700px){ .service-strip{ padding:14px 16px;} .service-strip .s-price{ order:3; width:100%; text-align:left;} }
+  .strip-head{ display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:26px; flex-wrap:wrap; gap:10px;}
+  .strip-head h2{ font-size:27px;}
+  .strip-head p{ color:var(--slate); font-size:14px; margin-top:6px;}
+
+  .value-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:18px;}
+  .value-card{
+    background:var(--card); border:1px solid var(--line); border-radius:14px; padding:24px;
+    border-top: 3px solid var(--amber);
+  }
+  .value-card.for-org{ border-top-color: var(--coral);}
+  .value-card.for-platform{ border-top-color: var(--petrol);}
+  .value-card .kicker{ font-family:'Space Mono'; font-size:11px; color:var(--slate); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:12px;}
+  .value-card h3{ font-size:17.5px; margin-bottom:9px;}
+  .value-card p{ font-size:13.5px; color:var(--slate); line-height:1.6; margin:0;}
+
+  .step-row{ display:grid; grid-template-columns:repeat(3,1fr); gap:0; position:relative; margin-top:6px;}
+  .step-row::before{ content:''; position:absolute; top:20px; left:8%; right:8%; height:2px; background:var(--line);}
+  .step{ text-align:center; padding:0 14px; position:relative;}
+  .step .stepnum{
+    width:40px; height:40px; border-radius:50%; background:var(--petrol); color:var(--paper); font-family:'Space Mono';
+    display:flex; align-items:center; justify-content:center; margin:0 auto 14px; position:relative; z-index:2; font-size:14px;
+  }
+  .step h3{ font-size:15.5px; margin-bottom:7px;}
+  .step p{ font-size:13px; color:var(--slate); line-height:1.55; margin:0;}
+
+  /* ---------- Toolbar / filters ---------- */
+  .toolbar{
+    display:flex; gap:12px; flex-wrap:wrap; align-items:center;
+    background:var(--card); border:1px solid var(--line); border-radius:12px; padding:15px 17px; margin:24px 0;
+  }
+  input[type=text], input[type=date], input[type=email], input[type=password], input[type=tel], select, textarea{
+    font-family:'Inter'; border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; font-size:13.5px;
+    background:#fff; color:var(--ink);
+  }
+  input:focus, select:focus, textarea:focus{ outline:2px solid var(--amber); outline-offset:1px; border-color:var(--amber);}
+  .toolbar input, .toolbar select{ flex:1; min-width:150px;}
+
+  /* ---------- Fair DEPARTURE BOARD (signature list item) ---------- */
+  .registry-list{ display:flex; flex-direction:column; gap:16px;}
+
+  .category-section{ margin-bottom:36px;}
+  .category-section:last-child{ margin-bottom:0;}
+  .category-head{ display:flex; align-items:center; gap:12px; margin-bottom:16px;}
+  .category-dot{ width:11px; height:11px; border-radius:50%; flex-shrink:0;}
+  .category-dot.is-live{ background:var(--coral); animation: livePulse 1.7s infinite;}
+  .category-dot.is-soon{ background:var(--amber);}
+  .category-dot.is-planned{ background:var(--petrol);}
+  @keyframes livePulse{
+    0%{ box-shadow:0 0 0 0 rgba(225,85,59,0.5);}
+    70%{ box-shadow:0 0 0 9px rgba(225,85,59,0);}
+    100%{ box-shadow:0 0 0 0 rgba(225,85,59,0);}
+  }
+  @media (prefers-reduced-motion: reduce){ .category-dot.is-live{ animation:none;} }
+  .category-title{ font-family:'Space Grotesk'; font-weight:700; font-size:18px;}
+  .category-desc{ font-size:12.5px; color:var(--slate); margin-top:1px;}
+  .category-count{ font-family:'Space Mono'; font-size:11.5px; color:var(--slate); background:var(--paper-2); padding:4px 11px; border-radius:20px; margin-left:auto;}
+
+  /* board card shell */
+  .fair-ticket{
+    background:var(--card); border:1px solid var(--line); border-radius:16px;
+    display:grid; grid-template-columns: 100px 1fr 128px; position:relative; overflow:hidden;
+    box-shadow:0 2px 0 rgba(18,37,35,0.03); transition:box-shadow .18s ease, transform .18s ease;
+  }
+  .fair-ticket:hover{ box-shadow:var(--shadow); transform:translateY(-2px);}
+  .fair-ticket.is-live{ box-shadow:0 4px 18px rgba(225,85,59,0.12);}
+
+  /* left: split-flap date panel */
+  .ticket-date{
+    background:var(--ink); color:var(--paper);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+    padding:14px 6px; position:relative;
+  }
+  .flap-row{ display:flex; gap:2.5px;}
+  .flap{
+    width:20px; height:26px; background:#1B302E; border-radius:3px; position:relative;
+    display:flex; align-items:center; justify-content:center; overflow:hidden;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), inset 0 -2px 3px rgba(0,0,0,0.4);
+  }
+  .flap span{ font-family:'Space Mono'; font-weight:700; font-size:14.5px; color:var(--paper); line-height:1;}
+  .flap::after{ content:''; position:absolute; left:0; right:0; top:50%; height:1px; background:rgba(0,0,0,0.55); transform:translateY(-0.5px);}
+  .fair-ticket.is-soon .flap{ background:#1F4A34;}
+  .fair-ticket.is-live .flap{ background:#5C2019;}
+  .board-mon{ font-family:'Space Mono'; font-size:10px; text-transform:uppercase; letter-spacing:0.12em; color:var(--amber);}
+  .board-yr{ font-size:9px; color:rgba(251,247,240,0.5);}
+
+  .ticket-main{ padding:16px 20px;}
+  .board-dest{
+    display:flex; align-items:center; gap:6px; font-family:'Space Mono'; font-size:11px;
+    text-transform:uppercase; letter-spacing:0.1em; color:var(--slate); margin-bottom:6px;
+  }
+  .board-dest .arrow{ color:var(--coral); font-weight:700;}
+  .board-dest .dest-city{ font-weight:700; color:var(--ink); letter-spacing:0.08em;}
+  .ticket-main h3{ font-size:16.5px; margin-bottom:7px;}
+  .fair-meta{ display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--slate); margin-bottom:8px;}
+  .fair-meta span{ display:flex; align-items:center; gap:5px;}
+  .fair-desc{ font-size:12.5px; color:var(--slate); max-width:520px; line-height:1.5;}
+  .fair-tags{ margin-top:9px; display:flex; gap:7px; flex-wrap:wrap; align-items:center;}
+  .tag{ font-size:10px; font-family:'Space Mono'; padding:3px 9px; border-radius:6px; background:var(--paper-2); color:var(--slate);}
+  .tag.approved{ background:var(--success-light); color:var(--success);}
+  .tag.featured{ background:#FDECD3; color:var(--amber-deep);}
+  .tag.pending{ background:var(--coral-light); color:var(--coral);}
+  .tag.reviewing{ background:#FDECD3; color:var(--amber-deep);}
+  .tag.rejected{ background:var(--ink); color:#fff;}
+  .city-name{ font-weight:700; color:var(--ink);}
+
+  /* right: status column */
+  .ticket-stub{
+    border-left:1px solid var(--line); display:flex; flex-direction:column; justify-content:center; align-items:center;
+    gap:8px; padding:14px 10px; position:relative; background:var(--paper-2);
+  }
+  .board-status-lamp{
+    display:flex; align-items:center; gap:5px; font-family:'Space Mono'; font-size:10px; font-weight:700;
+    letter-spacing:0.05em; padding:4px 9px; border-radius:20px;
+  }
+  .board-status-lamp.live{ background:var(--coral); color:#fff;}
+  .board-status-lamp.live .lamp-dot{ width:6px; height:6px; border-radius:50%; background:#fff; animation:livePulse 1.7s infinite;}
+  .board-status-lamp.soon{ background:var(--success-light); color:var(--success);}
+  .board-status-lamp.planned{ background:var(--paper); color:var(--petrol); border:1px solid var(--line);}
+  .board-countdown{ display:flex; flex-direction:column; align-items:center; gap:3px;}
+  .board-countdown .flap-row .flap{ background:#1F4A34;}
+  .board-countdown .cd-label{ font-family:'Space Mono'; font-size:8.5px; color:var(--success); letter-spacing:0.08em; text-transform:uppercase;}
+  .board-runway{ width:100%; max-width:96px;}
+  .board-runway .rtrack{ height:4px; background:var(--line); border-radius:4px; position:relative; overflow:visible;}
+  .board-runway .rfill{ height:100%; background:var(--coral); border-radius:4px;}
+  .board-runway .rplane{ position:absolute; top:50%; transform:translate(-50%,-50%); font-size:11px;}
+  .board-runway .rlabel{ font-family:'Space Mono'; font-size:8.5px; color:var(--slate); margin-top:5px; text-align:center;}
+  .ticket-stub .regno{ font-family:'Space Mono'; font-size:9px; color:var(--slate); text-align:center; opacity:0.75;}
+
+  .empty{ text-align:center; padding:56px 20px; color:var(--slate); border:1.5px dashed var(--line); border-radius:14px; background:var(--card);}
+  .empty h3{ margin-bottom:8px; color:var(--ink);}
+
+  /* ---------- Pricing ---------- */
+  .plan-tabs{ display:flex; gap:10px; margin:28px 0 24px;}
+  .plan-tab{ padding:10px 18px; border-radius:9px; border:1.5px solid var(--line); background:var(--card); font-weight:700; font-size:13.5px; color:var(--slate);}
+  .plan-tab.active{ border-color:var(--petrol); background:var(--petrol); color:var(--paper);}
+  .pricing-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:20px;}
+  .price-card{
+    background:var(--card); border:1.5px solid var(--line); border-radius:16px; padding:30px;
+    display:flex; flex-direction:column; gap:15px; position:relative;
+  }
+  .price-card.highlight{ border-color:var(--amber); background: linear-gradient(180deg, #fff, #FFF9EE);}
+  .price-card.highlight::before{
+    content:'ÖNERİLEN'; position:absolute; top:-11px; right:24px; background:var(--amber); color:#2b1d05;
+    font-size:10px; font-weight:700; letter-spacing:0.07em; padding:5px 11px; border-radius:20px;
+  }
+  .price-card h3{ font-size:18.5px;}
+  .price-tag{ display:flex; align-items:baseline; gap:6px;}
+  .price-tag .amt{ font-family:'Space Grotesk'; font-size:36px; font-weight:700;}
+  .price-tag .per{ font-size:13px; color:var(--slate);}
+  .feat-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px;}
+  .feat-list li{ font-size:13.5px; color:var(--ink); display:flex; gap:9px; align-items:flex-start;}
+  .feat-list li::before{ content:'✓'; color:var(--success); font-weight:700;}
+
+  /* ---------- Forms / auth / dashboard ---------- */
+  .panel{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:32px; max-width:520px; margin:36px auto;}
+  .field{ display:flex; flex-direction:column; gap:6px; margin-bottom:15px;}
+  .field label{ font-size:12px; font-weight:700; color:var(--slate); text-transform:uppercase; letter-spacing:0.04em;}
+  .field textarea{ resize:vertical; min-height:80px;}
+  .role-switch{ display:flex; gap:10px; margin-bottom:20px;}
+  .role-switch button{ flex:1; padding:11px; border-radius:9px; border:1.5px solid var(--line); background:var(--card); font-weight:700; font-size:13px; color:var(--slate);}
+  .role-switch button.active{ border-color:var(--petrol); background:var(--petrol); color:#fff;}
+  .hint-box{ background:var(--paper-2); border:1px dashed var(--amber-deep); border-radius:10px; padding:12px 14px; font-size:12.5px; color:var(--slate); margin-bottom:18px;}
+  .msg{ padding:12px 14px; border-radius:9px; font-size:13px; margin-bottom:16px;}
+  .msg.ok{ background:var(--success-light); color:var(--success);}
+  .msg.err{ background:var(--coral-light); color:var(--coral);}
+
+  .dash-grid{ display:grid; grid-template-columns:225px 1fr; gap:24px; margin-top:24px;}
+  .dash-side{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px; height:fit-content;}
+  .dash-side .who{ font-weight:700; font-size:15px; margin-bottom:2px;}
+  .dash-side .tier{ font-size:12px; color:var(--slate); margin-bottom:18px;}
+  .dash-side button{ width:100%; text-align:left; background:none; border:none; padding:10px 12px; border-radius:8px; font-size:13.5px; margin-bottom:4px; color:var(--slate); font-weight:600;}
+  .dash-side button.active{ background:var(--paper-2); color:var(--ink);}
+  .dash-main{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:26px;}
+  table.admin-table{ width:100%; border-collapse:collapse; font-size:13px;}
+  table.admin-table th{ text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:0.05em; color:var(--slate); padding:10px 8px; border-bottom:1.5px solid var(--line);}
+  table.admin-table td{ padding:12px 8px; border-bottom:1px solid var(--line); vertical-align:top;}
+  .row-actions{ display:flex; gap:8px;}
+
+  .upload-zone{
+    border:2px dashed var(--amber-deep); border-radius:14px; padding:32px; text-align:center; background:var(--paper-2);
+  }
+  .upload-zone input{ display:none;}
+  .stat-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:22px;}
+  .stat{ background:var(--paper-2); border-radius:12px; padding:16px;}
+  .stat .n{ font-family:'Space Grotesk'; font-size:25px; font-weight:700;}
+  .stat .l{ font-size:11px; color:var(--slate); text-transform:uppercase; letter-spacing:0.04em;}
+
+  footer{ border-top:1px solid var(--line); padding:32px 28px; text-align:center; color:var(--slate); font-size:12.5px;}
+
+  /* ---------- Modal & Toast (replace prompt/confirm/alert) ---------- */
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(18,37,35,0.5); backdrop-filter:blur(2px);
+    display:none; align-items:center; justify-content:center; z-index:200; padding:20px;
+  }
+  .modal-overlay.open{ display:flex; animation:fadeIn .2s ease;}
+  .modal-box{
+    background:var(--paper); border-radius:16px; padding:28px; max-width:440px; width:100%;
+    box-shadow:var(--shadow-lg); max-height:86vh; overflow-y:auto;
+  }
+  .modal-box h3{ font-size:19px; margin-bottom:14px;}
+  .modal-close-row{ display:flex; justify-content:flex-end; gap:10px; margin-top:18px;}
+  .toast-host{ position:fixed; bottom:24px; right:24px; z-index:300; display:flex; flex-direction:column; gap:10px; max-width:340px;}
+  .toast{
+    background:var(--ink); color:var(--paper); padding:14px 18px; border-radius:10px; font-size:13.5px;
+    box-shadow:var(--shadow-lg); animation:toastIn .25s ease; border-left:4px solid var(--amber);
+  }
+  .toast.err{ border-left-color:var(--coral);}
+  @keyframes toastIn{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:none;} }
+
+  @media (max-width: 880px){
+    .hero{ grid-template-columns:1fr; padding-top:36px;}
+    .value-grid, .pricing-grid, .dash-grid, .step-row{ grid-template-columns:1fr;}
+    .step-row::before{ display:none;}
+    .fair-ticket{ grid-template-columns:1fr; }
+    .ticket-date{ flex-direction:row; gap:10px; padding:12px;}
+    .ticket-stub{ border-left:none; border-top:1px solid var(--line); flex-direction:row; justify-content:space-between;}
+    .board-runway{ max-width:70px;}
+    nav.links{ display:none;}
+    .hamburger{ display:flex;}
+    .hero h1{ font-size:32px;}
+    .badge-wrap{ margin-top:20px;}
+    .brand-logo{ width:150px;}
+    .brand-tagline{ font-size:8.5px; padding-left:37px;}
+  }
+  .mobile-drawer.open{
+    display:flex; flex-direction:column; gap:4px; position:fixed; top:0; right:0; bottom:0; width:270px;
+    background:var(--paper); box-shadow:var(--shadow-lg); z-index:150; padding:80px 20px 20px;
+  }
+  .mobile-drawer button{ text-align:left; background:none; border:none; padding:12px 8px; font-size:15px; font-weight:600; color:var(--ink); border-bottom:1px solid var(--line);}
+  .drawer-close{ position:absolute; top:20px; right:20px; background:none; border:none; font-size:24px; color:var(--ink); line-height:1; padding:6px;}
+  .drawer-overlay{ display:none; position:fixed; inset:0; background:rgba(18,37,35,0.42); z-index:140;}
+  .drawer-overlay.open{ display:block;}
+  .fav-btn{ background:none; border:1.5px solid var(--line); border-radius:8px; width:36px; height:36px; font-size:17px; color:var(--slate); display:flex; align-items:center; justify-content:center; transition:all .15s ease;}
+  .fav-btn.active{ color:var(--amber-deep); border-color:var(--amber-deep); background:#FDECD3;}
+  .fav-btn:hover{ transform:translateY(-1px);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>TOBB ONAYLI FUARLAR SİCİLİ &nbsp;·&nbsp; GÜNCELLEME: <span id="lastUpdateTop">—</span></div>
+  <div class="seal-strip"><span>DESTEKLİ FUAR TAKİBİ</span><span>İHRACATÇI FIRSATLARI</span></div>
+</div>
+
+<header class="mainnav">
+  <div class="brand" onclick="go('home')">
+    <svg class="brand-logo" viewBox="0 0 214 40" xmlns="http://www.w3.org/2000/svg">
+      <g transform="translate(20,20)">
+        <rect x="-13" y="-7.5" width="23" height="15" rx="7.5" fill="none" stroke="var(--petrol)" stroke-width="4.6" transform="rotate(-20)"/>
+        <rect x="-10" y="-7.5" width="23" height="15" rx="7.5" fill="none" stroke="var(--amber)" stroke-width="4.6" transform="rotate(20)"/>
+      </g>
+      <text x="46" y="27" font-family="'Space Grotesk',sans-serif" font-weight="700" font-size="21" letter-spacing="0.2" fill="var(--ink)">FUAR SİCİLİ</text>
+    </svg>
+    <small class="brand-tagline">Ticaret &amp; Fuar Kayıt Platformu</small>
+  </div>
+  <nav class="links">
+    <button class="navbtn" data-view="home" onclick="go('home')">Ana Sayfa</button>
+    <button class="navbtn" data-view="calendar" onclick="go('calendar')">Fuar Takvimi</button>
+    <button class="navbtn" data-view="pricing" onclick="go('pricing')">Üyelik &amp; Fiyatlar</button>
+    <button class="navbtn" data-view="organizers" onclick="go('organizers')">Organizatörler İçin</button>
+    <button class="navbtn" data-view="about" onclick="go('about')">Hakkında</button>
+    <button class="navcta subscribe" onclick="startSubscribeFlow()">Abone Ol</button>
+    <span id="navAuthArea"></span>
+  </nav>
+  <button class="hamburger" onclick="toggleDrawer()"><span></span><span></span><span></span></button>
+</header>
+<div class="drawer-overlay" id="drawerOverlay" onclick="toggleDrawer()"></div>
+<div class="mobile-drawer" id="mobileDrawer">
+  <button class="drawer-close" onclick="toggleDrawer()">✕</button>
+  <button onclick="go('home'); toggleDrawer()">Ana Sayfa</button>
+  <button onclick="go('calendar'); toggleDrawer()">Fuar Takvimi</button>
+  <button onclick="go('pricing'); toggleDrawer()">Üyelik &amp; Fiyatlar</button>
+  <button onclick="go('organizers'); toggleDrawer()">Organizatörler İçin</button>
+  <button onclick="go('about'); toggleDrawer()">Hakkında</button>
+  <button onclick="startSubscribeFlow(); toggleDrawer()" style="color:var(--success); font-weight:700;">Abone Ol</button>
+  <button onclick="go('auth'); toggleDrawer()">Giriş / Üye Ol</button>
+</div>
+
+<main>
+
+  <!-- ================= HOME ================= -->
+  <section class="view" id="view-home">
+    <div class="hero">
+      <div>
+        <div class="eyebrow">TOBB onaylı fuarlar · Sicil No FS-2026</div>
+        <h1>Türkiye'nin fuar takvimine,<br>giriş kartınızı alın.</h1>
+        <p class="lede">TOBB'un düzenli yayınladığı fuar listelerini takip ediyor; ihracat destekli fuarları, başvuru süreçlerini ve güncel fırsatları firmalar ve organizatörler için tek platformda buluşturuyoruz.</p>
+        <div class="hero-actions">
+          <button class="btn btn-primary" onclick="go('calendar')">Güncel Fuarları Gör</button>
+          <button class="btn btn-outline" onclick="go('organizers')">Fuarımı Listele</button>
+        </div>
+      </div>
+      <div class="badge-wrap">
+        <div class="access-badge">
+          <div class="strap"></div>
+          <div class="hole"></div>
+          <div class="badge-top">
+            <div class="btitle">FUAR SİCİLİ</div>
+            <div class="bsub">Katılımcı Erişim Kartı</div>
+          </div>
+          <div class="badge-body" id="heroBadgeBody"></div>
+          <div class="badge-perf"></div>
+          <div class="barcode-strip">
+            <div class="barcode"></div>
+            <div class="barcode-num" id="heroBadgeNo">FS-2026-0000</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="service-strip">
+      <div class="s-icon">🧭</div>
+      <div class="s-text">
+        <b>Başvuru Takip Hizmeti</b>
+        <span>Katılım başvurunuzu ekibimiz sizin adınıza takip etsin, organizatörle iletişimi yönetsin.</span>
+      </div>
+      <div class="s-price">₺1499 · tek seferlik</div>
+      <button class="btn btn-amber btn-sm" onclick="openServiceModal()">Hizmeti Satın Al</button>
+    </div>
+
+    <section class="strip">
+      <div class="strip-head">
+        <div><h2>Nasıl çalışır?</h2><p>Üç adımda dağınık Excel listelerinden yönetilebilir bir platforma</p></div>
+      </div>
+      <div class="step-row">
+        <div class="step"><div class="stepnum">01</div><h3>Sicile kaydolun</h3><p>Firma veya organizatör olarak üye olun, rolünüze göre panelinize ulaşın.</p></div>
+        <div class="step"><div class="stepnum">02</div><h3>Fuarları keşfedin / ekleyin</h3><p>Firmalar filtreli takvimden başvurur, organizatörler kendi fuarını sicile ekler.</p></div>
+        <div class="step"><div class="stepnum">03</div><h3>Onaylanın, bağlanın</h3><p>Onaylanan başvurular ve fuarlar canlıya alınır, taraflar doğrudan iletişime geçer.</p></div>
+      </div>
+    </section>
+
+    <section class="strip">
+      <div class="strip-head">
+        <div><h2>Kimin için?</h2></div>
+      </div>
+      <div class="value-grid">
+        <div class="value-card"><div class="kicker">Firmalar</div><h3>Kaçırılmayan takvim</h3><p>Sektörünüze ve şehrinize göre filtrelenmiş, TOBB onaylı fuarları ve ihracat destek durumunu tek ekranda görün.</p></div>
+        <div class="value-card for-org"><div class="kicker">Organizatörler</div><h3>Doğru kitleye ulaşım</h3><p>Fuarınızı sicile ekleyin, öne çıkan ilan paketiyle ilgili firmaların önüne çıkın, başvuruları panelinizden yönetin.</p></div>
+        <div class="value-card for-platform"><div class="kicker">Sicil Yönetimi</div><h3>Güncel ve sürdürülebilir</h3><p>Yönetici paneline yüklenen TOBB Excel verileri otomatik olarak sicile işlenir, hiçbir fuar gözden kaçmaz.</p></div>
+      </div>
+    </section>
+  </section>
+
+  <!-- ================= CALENDAR ================= -->
+  <section class="view" id="view-calendar">
+    <div class="strip-head" style="margin-top:34px;">
+      <div><h2>Fuar Sicili</h2><p id="calSubtitle">TOBB onaylı, güncel fuar kayıtları</p></div>
+    </div>
+    <div class="toolbar">
+      <input type="text" id="fSearch" placeholder="Fuar adı ara…" oninput="renderCalendar()">
+      <select id="fSector" onchange="renderCalendar()"><option value="">Tüm Sektörler</option></select>
+      <select id="fCity" onchange="renderCalendar()"><option value="">Tüm Şehirler</option></select>
+      <select id="fSupport" onchange="renderCalendar()">
+        <option value="">Destek Durumu</option>
+        <option value="yes">İhracat Destekli</option>
+        <option value="no">Destek Belirtilmemiş</option>
+      </select>
+    </div>
+    <div class="registry-list" id="registryList"></div>
+  </section>
+
+  <!-- ================= PRICING ================= -->
+  <section class="view" id="view-pricing">
+    <div class="strip-head" style="margin-top:34px;">
+      <div><h2>Üyelik &amp; Fiyatlandırma</h2><p>Firmalar ve organizatörler için ayrı paketler</p></div>
+    </div>
+    <div class="plan-tabs">
+      <button class="plan-tab active" id="tabCompanyPlans" onclick="setPlanTab('company')">Firmalar İçin</button>
+      <button class="plan-tab" id="tabOrgPlans" onclick="setPlanTab('org')">Organizatörler İçin</button>
+    </div>
+
+    <div id="companyPlans" class="pricing-grid">
+      <div class="price-card">
+        <h3>Ücretsiz</h3>
+        <div class="price-tag"><span class="amt">₺0</span><span class="per">/ ay</span></div>
+        <ul class="feat-list">
+          <li>Genel fuar takvimini görüntüleme</li>
+          <li>Şehir ve sektör filtreleme</li>
+          <li>İlk 5 katılım başvurusu ücretsiz</li>
+        </ul>
+        <button class="btn btn-outline" onclick="subscribe('company','free')">Mevcut Plan</button>
+      </div>
+      <div class="price-card highlight">
+        <h3>Premium Üye</h3>
+        <div class="price-tag"><span class="amt">₺499</span><span class="per">/ ay</span></div>
+        <ul class="feat-list">
+          <li>Sınırsız katılım başvurusu</li>
+          <li>Yeni fuarlar için erken bildirim</li>
+          <li>İhracat destek tutarı ve koşul detayları</li>
+          <li>Sektörünüze özel fırsat bülteni</li>
+          <li>Favori fuar takibi ve hatırlatma</li>
+          <li>Başvurularda öncelikli değerlendirme</li>
+        </ul>
+        <button class="btn btn-primary" onclick="subscribe('company','premium')">Premium'a Geç</button>
+      </div>
+    </div>
+
+    <div id="orgPlans" class="pricing-grid" style="display:none;">
+      <div class="price-card">
+        <h3>Standart Listeleme</h3>
+        <div class="price-tag"><span class="amt">₺0</span><span class="per">/ başvuru</span></div>
+        <ul class="feat-list">
+          <li>Fuarınızı sicile ekleme başvurusu</li>
+          <li>Onay sonrası genel listede yer alma</li>
+          <li>Temel bilgilerle görünürlük</li>
+        </ul>
+        <button class="btn btn-outline" onclick="go('organizers')">Başvuru Yap</button>
+      </div>
+      <div class="price-card highlight">
+        <h3>Öne Çıkan İlan</h3>
+        <div class="price-tag"><span class="amt">₺499</span><span class="per">/ ay</span></div>
+        <ul class="feat-list">
+          <li>Ana sayfa ve listede "Öne Çıkan" rozeti</li>
+          <li>Üst sıralarda gösterim</li>
+          <li>Başvuru istatistikleri paneli</li>
+          <li>Premium üyelere doğrudan bildirim</li>
+        </ul>
+        <button class="btn btn-primary" onclick="subscribe('organizer','featured')">Öne Çıkan Ol</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ORGANIZERS INFO ================= -->
+  <section class="view" id="view-organizers">
+    <div class="strip-head" style="margin-top:34px;">
+      <div><h2>Organizatörler İçin</h2><p>Fuarınızı sicile ekletin, doğru firmalara ulaşın</p></div>
+    </div>
+    <div class="step-row" style="margin-bottom:10px;">
+      <div class="step"><div class="stepnum">01</div><h3>Hesap açın</h3><p>Organizatör rolüyle kayıt olun veya giriş yapın.</p></div>
+      <div class="step"><div class="stepnum">02</div><h3>Fuar bilgilerini gönderin</h3><p>Panelinizden "Fuarımı Ekle" formunu doldurun.</p></div>
+      <div class="step"><div class="stepnum">03</div><h3>Onay ve yayın</h3><p>Yönetici onayının ardından fuarınız sicilde yayınlanır.</p></div>
+    </div>
+    <div style="text-align:center; margin-top:24px;">
+      <button class="btn btn-primary" onclick="requireAuthThen('organizer','dashboard')">Organizatör Panelime Git</button>
+    </div>
+  </section>
+
+  <!-- ================= ABOUT ================= -->
+  <section class="view" id="view-about">
+    <div class="strip-head" style="margin-top:34px;">
+      <div><h2>Hakkında</h2><p>Fuar Sicili'nin ne olduğu ve nasıl çalıştığı</p></div>
+    </div>
+    <div class="value-grid" style="margin-bottom:26px;">
+      <div class="value-card">
+        <div class="kicker">Misyonumuz</div>
+        <h3>Dağınık listeleri tek sicile toplamak</h3>
+        <p>TOBB'un düzenli yayınladığı fuar takvimlerini derleyip, firmalar ve organizatörler için filtrelenebilir, güncel ve erişilebilir tek bir platformda sunuyoruz.</p>
+      </div>
+      <div class="value-card for-org">
+        <div class="kicker">İlişkimiz</div>
+        <h3>Bağımsız bir platformuz</h3>
+        <p>Fuar Sicili, TOBB'un yayınladığı verilerden derlenen bağımsız bir bilgilendirme ve başvuru platformudur; TOBB'un resmi bir sistemi veya iştiraki değildir.</p>
+      </div>
+      <div class="value-card for-platform">
+        <div class="kicker">Kimin için</div>
+        <h3>Firmalar ve organizatörler</h3>
+        <p>İhracatçı firmalar güncel fuar ve destek bilgisine ulaşırken, organizatörler fuarlarını doğru kitleye duyurabiliyor.</p>
+      </div>
+    </div>
+    <div class="panel" style="max-width:640px;">
+      <h3 style="margin-bottom:12px; font-size:18px;">İletişim</h3>
+      <p style="font-size:13.5px; color:var(--slate); line-height:1.7;">Sorularınız, iş birliği talepleriniz veya veri düzeltme talepleriniz için bize <strong>destek@fuarsicili.com</strong> adresinden ulaşabilirsiniz.</p>
+      <p style="font-size:12.5px; color:var(--slate); margin-top:14px; line-height:1.6;">Fuar Sicili, TOBB onaylı fuarlara ilişkin genel bilgileri kolay erişilebilir kılmayı amaçlayan bağımsız bir teknoloji girişimidir.</p>
+    </div>
+  </section>
+
+  <!-- ================= LEGAL ================= -->
+  <section class="view" id="view-legal">
+    <div class="strip-head" style="margin-top:34px;">
+      <div><h2>Yasal Bilgiler</h2><p>KVKK, gizlilik, kullanım şartları ve iptal/iade koşulları</p></div>
+    </div>
+    <div class="hint-box" style="max-width:760px;">Bu metinler genel taslak şablonlardır ve hukuki danışmanlık yerine geçmez. Yayına almadan önce bir hukuk danışmanına onaylatmanızı öneririz.</div>
+    <div class="plan-tabs">
+      <button class="plan-tab active" id="legalTab-kvkk" onclick="setLegalTab('kvkk')">KVKK</button>
+      <button class="plan-tab" id="legalTab-privacy" onclick="setLegalTab('privacy')">Gizlilik Politikası</button>
+      <button class="plan-tab" id="legalTab-terms" onclick="setLegalTab('terms')">Kullanım Şartları</button>
+      <button class="plan-tab" id="legalTab-refund" onclick="setLegalTab('refund')">Mesafeli Satış &amp; İptal/İade</button>
+    </div>
+    <div class="panel" style="max-width:760px;" id="legalContent"></div>
+  </section>
+
+  <!-- ================= AUTH ================= -->
+  <section class="view" id="view-auth">
+    <div class="panel">
+      <div style="display:flex; justify-content:center; margin-bottom:18px;">
+        <svg width="200" height="38" viewBox="0 0 214 40" xmlns="http://www.w3.org/2000/svg">
+          <g transform="translate(20,20)">
+            <rect x="-13" y="-7.5" width="23" height="15" rx="7.5" fill="none" stroke="var(--petrol)" stroke-width="4.6" transform="rotate(-20)"/>
+            <rect x="-10" y="-7.5" width="23" height="15" rx="7.5" fill="none" stroke="var(--amber)" stroke-width="4.6" transform="rotate(20)"/>
+          </g>
+          <text x="46" y="27" font-family="'Space Grotesk',sans-serif" font-weight="700" font-size="21" letter-spacing="0.2" fill="var(--ink)">FUAR SİCİLİ</text>
+        </svg>
+      </div>
+      <h2 style="margin-bottom:20px; font-size:23px; text-align:center;">Giriş / Kayıt</h2>
+      <div id="authMsg"></div>
+      <div class="role-switch">
+        <button id="authTabLogin" class="active" onclick="setAuthTab('login')">Giriş Yap</button>
+        <button id="authTabRegister" onclick="setAuthTab('register')">Kayıt Ol</button>
+      </div>
+
+      <div id="loginForm">
+        <div class="field"><label>E-posta</label><input type="email" id="loginEmail" placeholder="ornek@firma.com"></div>
+        <div class="field"><label>Şifre</label><input type="password" id="loginPass"></div>
+        <div style="text-align:right; margin-bottom:14px;"><button onclick="openForgotPassword()" style="background:none; border:none; color:var(--slate); font-size:12px; text-decoration:underline; cursor:pointer;">Şifremi unuttum</button></div>
+        <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="doLogin()">Giriş Yap</button>
+      </div>
+
+      <div id="registerForm" style="display:none;">
+        <div class="role-switch">
+          <button id="regRoleCompany" class="active" onclick="setRegRole('company')">Firma / İhracatçı</button>
+          <button id="regRoleOrganizer" onclick="setRegRole('organizer')">Fuar Organizatörü</button>
+        </div>
+        <div class="field"><label>Firma / Kurum Adı</label><input type="text" id="regName"></div>
+        <div class="field"><label>E-posta</label><input type="email" id="regEmail"></div>
+        <div class="field"><label>Şifre</label><input type="password" id="regPass"></div>
+        <div class="field"><label>Telefon</label><input type="tel" id="regPhone" placeholder="05xx xxx xx xx"></div>
+        <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="doRegister()">Hesap Oluştur</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= DASHBOARD ================= -->
+  <section class="view" id="view-dashboard">
+    <div class="strip-head" style="margin-top:34px;">
+      <div><h2 id="dashTitle">Panel</h2><p id="dashSubtitle"></p></div>
+    </div>
+    <div class="dash-grid">
+      <div class="dash-side">
+        <div class="who" id="dashWho">—</div>
+        <div class="tier" id="dashTier">—</div>
+        <div id="dashSideNav"></div>
+        <button style="margin-top:10px; color:var(--coral); font-weight:700;" onclick="doLogout()">Çıkış Yap</button>
+      </div>
+      <div class="dash-main" id="dashMain"></div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <button onclick="go('about')" style="background:none; border:none; color:var(--slate); text-decoration:underline; cursor:pointer; font-size:12.5px;">Hakkımızda</button>
+  &nbsp;·&nbsp;
+  <button onclick="go('legal')" style="background:none; border:none; color:var(--slate); text-decoration:underline; cursor:pointer; font-size:12.5px;">Yasal Bilgiler (KVKK, Gizlilik, Şartlar, İptal/İade)</button>
+  &nbsp;·&nbsp; © 2026 Fuar Sicili
+</footer>
+
+<div class="modal-overlay" id="modalOverlay" onclick="closeModalOnOverlay(event)">
+  <div class="modal-box" id="modalBox" onclick="event.stopPropagation()"></div>
+</div>
+<div class="toast-host" id="toastHost"></div>
+
+<script>
+/* ============================================================
+   STORAGE HELPERS
+   ============================================================ */
+async function sGet(key, shared){
+  try{ const r = await window.storage.get(key, !!shared); return r ? JSON.parse(r.value) : null; }
+  catch(e){ return null; }
+}
+async function sSet(key, value, shared){
+  try{ await window.storage.set(key, JSON.stringify(value), !!shared); return true; }
+  catch(e){ console.error('storage set failed', e); return false; }
+}
+
+const SECTORS = ["Tekstil & Hazır Giyim","Makine & Otomasyon","Gıda & Tarım","Yapı & İnşaat","Mobilya & Dekorasyon","Elektronik & Teknoloji","Otomotiv & Yan Sanayi","Sağlık & Medikal","Enerji","Kimya & Plastik"];
+const CITIES = ["İstanbul","Ankara","İzmir","Bursa","Antalya","Gaziantep","Konya","Kayseri"];
+
+/* ============================================================
+   MODAL / TOAST (replaces prompt/confirm/alert)
+   ============================================================ */
+function showModal(html){
+  document.getElementById('modalBox').innerHTML = html;
+  document.getElementById('modalOverlay').classList.add('open');
+}
+function closeModal(){ document.getElementById('modalOverlay').classList.remove('open'); }
+function closeModalOnOverlay(e){ if(e.target.id === 'modalOverlay') closeModal(); }
+function showToast(msg, type){
+  const host = document.getElementById('toastHost');
+  const el = document.createElement('div');
+  el.className = 'toast' + (type === 'err' ? ' err' : '');
+  el.textContent = msg;
+  host.appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(), 300); }, 3800);
+}
+function toggleDrawer(){
+  document.getElementById('mobileDrawer').classList.toggle('open');
+  document.getElementById('drawerOverlay').classList.toggle('open');
+}
+
+/* ============================================================
+   SEED DATA
+   ============================================================ */
+function todayPlus(days){
+  const d = new Date(); d.setDate(d.getDate()+days);
+  return d.toISOString().slice(0,10);
+}
+function makeRegistryNo(i){
+  return "FS-2026-" + String(1000+i);
+}
+async function seedIfEmpty(){
+  let fairs = await sGet('fairs:list', true);
+  if(!fairs){
+    fairs = [
+      {id:crypto.randomUUID(), registryNo: makeRegistryNo(1), name:"Uluslararası Tekstil ve Hazır Giyim Fuarı", sector:SECTORS[0], city:"İstanbul", venue:"Tüyap Fuar Merkezi", start:todayPlus(-1), end:todayPlus(3), exportSupport:true, description:"İhracatçı firmalar için TOBB onaylı, devlet destekli katılım imkânı sunan sektörün öncü fuarı.", contactEmail:"basvuru@tuyapfuar.com.tr", contactPhone:"0212 000 00 00", organizerName:"Tüyap Fuarcılık A.Ş.", source:'admin', status:'approved', featured:true, createdAt: todayPlus(-4)},
+      {id:crypto.randomUUID(), registryNo: makeRegistryNo(2), name:"Makine ve Otomasyon Teknolojileri Fuarı", sector:SECTORS[1], city:"Bursa", venue:"Bursa Uluslararası Fuar Merkezi", start:todayPlus(20), end:todayPlus(23), exportSupport:true, description:"Makine imalat sanayii için yurt içi ve yurt dışı alıcı buluşmaları.", contactEmail:"info@bursaexpo.com.tr", contactPhone:"0224 000 00 00", organizerName:"Bursa Expo Fuarcılık", source:'admin', status:'approved', featured:false, createdAt: todayPlus(-3)},
+      {id:crypto.randomUUID(), registryNo: makeRegistryNo(3), name:"Gıda ve Tarım Teknolojileri Fuarı", sector:SECTORS[2], city:"Antalya", venue:"Antalya Expo Center", start:todayPlus(30), end:todayPlus(33), exportSupport:false, description:"Bölge üreticilerini ve gıda ihracatçılarını bir araya getiren yıllık organizasyon.", source:'admin', status:'approved', featured:false, createdAt: todayPlus(-10)},
+      {id:crypto.randomUUID(), registryNo: makeRegistryNo(4), name:"Yapı, İnşaat ve Yapı Malzemeleri Fuarı", sector:SECTORS[3], city:"Ankara", venue:"ATO Congresium", start:todayPlus(45), end:todayPlus(48), exportSupport:true, description:"İnşaat sektörü paydaşları ve tedarikçileri için B2B odaklı fuar.", source:'admin', status:'approved', featured:false, createdAt: todayPlus(-20)},
+      {id:crypto.randomUUID(), registryNo: makeRegistryNo(5), name:"Mobilya ve Dekorasyon Fuarı", sector:SECTORS[4], city:"İzmir", venue:"İzmir Fuar Alanı", start:todayPlus(60), end:todayPlus(63), exportSupport:false, description:"Ev ve ofis mobilyası üreticilerinin yeni koleksiyonlarını sergilediği fuar.", source:'admin', status:'approved', featured:false, createdAt: todayPlus(-25)}
+    ];
+    await sSet('fairs:list', fairs, true);
+  }
+  let apps = await sGet('applications:list', true);
+  if(!apps){ await sSet('applications:list', [], true); }
+  let users = await sGet('users:list', true);
+  if(!users){
+    users = [{id:crypto.randomUUID(), name:"Sistem Yöneticisi", email:"admin@fuarsicili.com", pass:"admin123", role:"admin", tier:"admin", phone:""}];
+    await sSet('users:list', users, true);
+  }
+}
+
+/* ============================================================
+   STATE
+   ============================================================ */
+let CURRENT_VIEW = 'home';
+let PLAN_TAB = 'company';
+let DASH_TAB = 'overview';
+let REG_ROLE = 'company';
+let CURRENT_LEGAL_TAB = 'kvkk';
+let SESSION_EMAIL = null;
+
+async function initSession(){
+  const s = await sGet('session:current', false);
+  SESSION_EMAIL = s && s.email ? s.email : null;
+}
+async function currentUser(){
+  if(!SESSION_EMAIL) return null;
+  const users = await sGet('users:list', true) || [];
+  return users.find(u => u.email === SESSION_EMAIL) || null;
+}
+
+/* ============================================================
+   NAV
+   ============================================================ */
+async function go(view){
+  CURRENT_VIEW = view;
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-'+view).classList.add('active');
+  document.querySelectorAll('.navbtn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  window.scrollTo({top:0, behavior:'smooth'});
+
+  if(view === 'home') await renderHome();
+  if(view === 'calendar') await renderCalendar();
+  if(view === 'dashboard') await renderDashboard();
+  if(view === 'legal') setLegalTab(CURRENT_LEGAL_TAB);
+  await renderNavAuthArea();
+}
+
+async function requireAuthThen(roleHint, targetView){
+  const u = await currentUser();
+  if(!u){
+    REG_ROLE = roleHint || 'company';
+    await go('auth');
+    setAuthTab('register'); setRegRole(REG_ROLE);
+    return;
+  }
+  await go(targetView);
+}
+
+async function renderNavAuthArea(){
+  const el = document.getElementById('navAuthArea');
+  const u = await currentUser();
+  if(u){
+    el.innerHTML = `<button class="navcta secondary" onclick="go('dashboard')">${u.name.split(' ')[0]} · Panel</button>`;
+  } else {
+    el.innerHTML = `<button class="navcta secondary" onclick="go('auth')">Giriş Yap</button><button class="navcta" onclick="go('auth')">Üye Ol</button>`;
+  }
+}
+
+/* ============================================================
+   HOME
+   ============================================================ */
+async function renderHome(){
+  const fairs = (await sGet('fairs:list', true) || []).filter(f => f.status === 'approved');
+  fairs.sort((a,b)=> new Date(a.start) - new Date(b.start));
+  const next = fairs[0];
+  const body = document.getElementById('heroBadgeBody');
+  if(next){
+    body.innerHTML = `
+      <div class="brow"><span class="k">Fuar</span><span class="v">${escapeHtml(next.name.length>28?next.name.slice(0,28)+'…':next.name)}</span></div>
+      <div class="brow"><span class="k">Şehir</span><span class="v">${escapeHtml(next.city)}</span></div>
+      <div class="brow"><span class="k">Tarih</span><span class="v">${formatDate(next.start)}</span></div>
+      <div class="brow"><span class="k">Yetki</span><span class="v">Katılımcı Erişimi</span></div>`;
+    document.getElementById('heroBadgeNo').textContent = next.registryNo;
+  } else {
+    body.innerHTML = `<div class="brow"><span class="k">Durum</span><span class="v">Kayıt yok</span></div>`;
+  }
+  document.getElementById('lastUpdateTop').textContent = formatDate(new Date().toISOString().slice(0,10));
+}
+
+/* ============================================================
+   CALENDAR / REGISTRY
+   ============================================================ */
+function populateFilterOnce(){
+  const sSel = document.getElementById('fSector');
+  const cSel = document.getElementById('fCity');
+  if(sSel.dataset.filled) return;
+  SECTORS.forEach(s => sSel.insertAdjacentHTML('beforeend', `<option value="${s}">${s}</option>`));
+  CITIES.forEach(c => cSel.insertAdjacentHTML('beforeend', `<option value="${c}">${c}</option>`));
+  sSel.dataset.filled = "1";
+}
+function categorizeFair(f){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const start = new Date(f.start); start.setHours(0,0,0,0);
+  const end = new Date(f.end); end.setHours(0,0,0,0);
+  if(today >= start && today <= end) return 'live';
+  if(start > today){
+    const diffDays = Math.round((start - today) / 86400000);
+    return diffDays <= 21 ? 'soon' : 'planned';
+  }
+  return 'past';
+}
+
+function makeFlaps(text){
+  return text.split('').map(ch => `<div class="flap"><span>${ch}</span></div>`).join('');
+}
+
+function buildFairTicket(f, category, isPremium, favs, months){
+  const d = new Date(f.start);
+  const dayStr = String(d.getDate()).padStart(2,'0');
+  let statusHtml = '';
+
+  if(category === 'live'){
+    const today = new Date(); today.setHours(0,0,0,0);
+    const start = new Date(f.start); start.setHours(0,0,0,0);
+    const end = new Date(f.end); end.setHours(0,0,0,0);
+    const total = Math.max(1, Math.round((end - start)/86400000) + 1);
+    const elapsed = Math.min(total, Math.round((today - start)/86400000) + 1);
+    const pct = Math.max(6, Math.round((elapsed/total)*100));
+    const daysLeft = Math.max(0, Math.round((end - today)/86400000));
+    statusHtml = `
+      <div class="board-status-lamp live"><span class="lamp-dot"></span>ŞİMDİ · CANLI</div>
+      <div class="board-runway">
+        <div class="rtrack"><div class="rfill" style="width:${pct}%;"></div><span class="rplane" style="left:${pct}%;">✈</span></div>
+        <div class="rlabel">${daysLeft === 0 ? 'bugün son gün' : daysLeft + ' gün sonra biter'}</div>
+      </div>`;
+  } else if(category === 'soon'){
+    const today = new Date(); today.setHours(0,0,0,0);
+    const start = new Date(f.start); start.setHours(0,0,0,0);
+    const daysLeft = Math.round((start - today)/86400000);
+    statusHtml = `
+      <div class="board-status-lamp soon">YAKLAŞIYOR</div>
+      <div class="board-countdown">
+        <div class="flap-row">${makeFlaps(String(daysLeft).padStart(2,'0'))}</div>
+        <div class="cd-label">gün kaldı</div>
+      </div>`;
+  } else {
+    statusHtml = `<div class="board-status-lamp planned">PLANLANDI</div>`;
+  }
+
+  return `
+    <div class="fair-ticket is-${category}">
+      <div class="ticket-date">
+        <div class="flap-row">${makeFlaps(dayStr)}</div>
+        <div class="board-mon">${months[d.getMonth()]}</div>
+        <div class="board-yr">${d.getFullYear()}</div>
+      </div>
+      <div class="ticket-main">
+        <div class="board-dest"><span class="arrow">→</span><span class="dest-city">${escapeHtml(f.city)}</span></div>
+        <h3>${escapeHtml(f.name)}</h3>
+        <div class="fair-meta">
+          <span>🏛 ${escapeHtml(f.venue||'—')}</span>
+          <span>🗓 ${formatDate(f.start)} – ${formatDate(f.end)}</span>
+          <span>🏷 ${escapeHtml(f.sector)}</span>
+        </div>
+        <div class="fair-desc">${escapeHtml(isPremium ? f.description : (f.description||'').slice(0,90) + ((f.description||'').length>90 ? '… (detay için Premium)' : ''))}</div>
+        <div class="fair-tags">
+          <span class="tag approved">TOBB Onaylı</span>
+          ${f.featured ? '<span class="tag featured">Öne Çıkan</span>' : ''}
+          ${f.exportSupport ? (isPremium ? '<span class="tag approved">İhracat Destekli</span>' : '<span class="tag pending">Destek Bilgisi · Premium</span>') : ''}
+        </div>
+      </div>
+      <div class="ticket-stub">
+        ${statusHtml}
+        <button class="fav-btn ${favs.includes(f.id) ? 'active' : ''}" onclick="toggleFavorite('${f.id}')" title="Favorilere ekle/çıkar">${favs.includes(f.id) ? '★' : '☆'}</button>
+        <button class="btn btn-primary btn-sm" onclick="openApplyModal('${f.id}')">Başvur</button>
+        <div class="regno">${f.registryNo}</div>
+      </div>
+    </div>`;
+}
+
+async function renderCalendar(){
+  populateFilterOnce();
+  const fairs = (await sGet('fairs:list', true) || []).filter(f => f.status === 'approved');
+  const q = document.getElementById('fSearch').value.trim().toLowerCase();
+  const sector = document.getElementById('fSector').value;
+  const city = document.getElementById('fCity').value;
+  const support = document.getElementById('fSupport').value;
+
+  let filtered = fairs.filter(f => {
+    if(q && !f.name.toLowerCase().includes(q)) return false;
+    if(sector && f.sector !== sector) return false;
+    if(city && f.city !== city) return false;
+    if(support === 'yes' && !f.exportSupport) return false;
+    if(support === 'no' && f.exportSupport) return false;
+    return true;
+  });
+
+  const u = await currentUser();
+  const isPremium = u && (u.tier === 'premium' || u.role === 'admin');
+  const favs = (u && u.favorites) ? u.favorites : [];
+  const months = ["OCA","ŞUB","MAR","NİS","MAY","HAZ","TEM","AĞU","EYL","EKİ","KAS","ARA"];
+
+  const grouped = {live:[], soon:[], planned:[]};
+  filtered.forEach(f => {
+    const cat = categorizeFair(f);
+    if(grouped[cat]) grouped[cat].push(f);
+  });
+  grouped.live.sort((a,b)=> new Date(a.end) - new Date(b.end));
+  grouped.soon.sort((a,b)=> (b.featured - a.featured) || (new Date(a.start) - new Date(b.start)));
+  grouped.planned.sort((a,b)=> (b.featured - a.featured) || (new Date(a.start) - new Date(b.start)));
+
+  const visibleCount = grouped.live.length + grouped.soon.length + grouped.planned.length;
+  document.getElementById('calSubtitle').textContent = `${visibleCount} fuar listeleniyor · TOBB onaylı, sicile kayıtlı`;
+  const list = document.getElementById('registryList');
+  if(visibleCount === 0){
+    list.innerHTML = `<div class="empty"><h3>Kayıt bulunamadı</h3><p>Filtreleri değiştirip tekrar deneyin.</p></div>`;
+    return;
+  }
+
+  const sections = [
+    {key:'live', dot:'is-live', title:'Canlı · Devam Eden Fuarlar', desc:'Şu anda düzenlenmekte olan fuarlar', items:grouped.live},
+    {key:'soon', dot:'is-soon', title:'Yaklaşan Fuarlar', desc:'Önümüzdeki 3 hafta içinde başlayacaklar', items:grouped.soon},
+    {key:'planned', dot:'is-planned', title:'Planlanan Fuarlar', desc:'Daha ileri tarihli, planlama aşamasındaki fuarlar', items:grouped.planned}
+  ];
+
+  list.innerHTML = sections.filter(s => s.items.length > 0).map(s => `
+    <div class="category-section">
+      <div class="category-head">
+        <div class="category-dot ${s.dot}"></div>
+        <div>
+          <div class="category-title">${s.title}</div>
+          <div class="category-desc">${s.desc}</div>
+        </div>
+        <div class="category-count">${s.items.length} fuar</div>
+      </div>
+      <div class="registry-list">
+        ${s.items.map(f => buildFairTicket(f, s.key, isPremium, favs, months)).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function formatDate(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('tr-TR', {day:'2-digit', month:'2-digit', year:'numeric'});
+}
+function escapeHtml(s){
+  return String(s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+/* ============================================================
+   FAVORITES
+   ============================================================ */
+/* ============================================================
+   TAKİP HİZMETİ (aboneliğe alternatif tek seferlik gelir)
+   ============================================================ */
+const TRACKING_SERVICE_PRICE = 1499;
+
+async function openServiceModal(){
+  const u = await currentUser();
+  if(!u){
+    REG_ROLE='company'; await go('auth'); setAuthTab('register'); setRegRole('company');
+    return;
+  }
+  const myApps = (await sGet('applications:list', true) || []).filter(a => a.email === u.email && a.type === 'katilim');
+  const fairOptions = myApps.length
+    ? myApps.map(a => `<option value="${a.fairId}">${escapeHtml(a.fairName)}</option>`).join('')
+    : `<option value="">Henüz bir başvurunuz yok</option>`;
+  showModal(`
+    <h3>Başvuru Takip Hizmeti</h3>
+    <p style="font-size:13px; color:var(--slate); line-height:1.6; margin-bottom:14px;">Ekibimiz, seçtiğiniz fuar başvurunuzun organizatörle iletişimini ve süreç takibini sizin adınıza yürütür.</p>
+    <div class="field"><label>Hangi başvuru için?</label><select id="svcFair">${fairOptions}</select></div>
+    <div class="field"><label>Not (opsiyonel)</label><textarea id="svcNote" placeholder="Özellikle önemli bir detay varsa yazabilirsiniz"></textarea></div>
+    <div style="background:var(--paper-2); border-radius:10px; padding:14px; margin:6px 0 16px; display:flex; justify-content:space-between; align-items:center;">
+      <span style="font-weight:700; font-size:13.5px;">Hizmet Bedeli (tek seferlik)</span>
+      <span class="mono" style="font-size:17px; font-weight:700;">₺${TRACKING_SERVICE_PRICE}</span>
+    </div>
+    <div class="modal-close-row">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Vazgeç</button>
+      <button class="btn btn-primary btn-sm" onclick="submitServiceOrder()">Ödemeyi Onayla ve Satın Al</button>
+    </div>
+  `);
+}
+
+async function submitServiceOrder(){
+  const u = await currentUser();
+  const fairSelect = document.getElementById('svcFair');
+  const fairId = fairSelect.value;
+  const fairName = fairId ? fairSelect.options[fairSelect.selectedIndex].text : 'Belirtilmedi';
+  const note = document.getElementById('svcNote').value.trim();
+
+  const orders = await sGet('serviceOrders:list', true) || [];
+  orders.push({
+    id: crypto.randomUUID(), companyName:u.name, email:u.email, phone:u.phone||'',
+    fairId, fairName, note, price: TRACKING_SERVICE_PRICE,
+    status:'paid', createdAt: new Date().toISOString()
+  });
+  await sSet('serviceOrders:list', orders, true);
+  closeModal();
+  showToast(`Ödeme alındı (demo). Takip hizmetiniz aktif — ekibimiz en kısa sürede sizinle iletişime geçecek.`);
+}
+
+async function toggleFavorite(fairId){
+  const u = await currentUser();
+  if(!u){
+    REG_ROLE='company'; await go('auth'); setAuthTab('register'); setRegRole('company');
+    return;
+  }
+  if(u.role !== 'company'){
+    showToast('Favori takibi firma hesapları için geçerlidir.', 'err');
+    return;
+  }
+  if(u.tier !== 'premium'){
+    showModal(`
+      <h3>Premium Özellik</h3>
+      <p style="font-size:13.5px; color:var(--slate); line-height:1.6;">Favori fuar takibi ve hatırlatma bildirimleri Premium üyelere özeldir.</p>
+      <div class="modal-close-row">
+        <button class="btn btn-ghost btn-sm" onclick="closeModal()">Kapat</button>
+        <button class="btn btn-primary btn-sm" onclick="closeModal(); subscribe('company','premium')">Premium'a Geç</button>
+      </div>
+    `);
+    return;
+  }
+  const users = await sGet('users:list', true) || [];
+  const idx = users.findIndex(x => x.email === u.email);
+  if(idx < 0) return;
+  const favs = users[idx].favorites || [];
+  const pos = favs.indexOf(fairId);
+  if(pos > -1){ favs.splice(pos,1); showToast('Favorilerden çıkarıldı.'); }
+  else { favs.push(fairId); showToast('Favorilere eklendi.'); }
+  users[idx].favorites = favs;
+  await sSet('users:list', users, true);
+  await renderCalendar();
+}
+
+/* ============================================================
+   PRICING
+   ============================================================ */
+/* ============================================================
+   YASAL METİNLER (taslak şablon — hukuki danışmanlık yerine geçmez)
+   ============================================================ */
+const LEGAL_TEXTS = {
+  kvkk: `
+    <h3 style="margin-bottom:14px;">KVKK Aydınlatma Metni</h3>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;"><strong>Veri Sorumlusu:</strong> Fuar Sicili ("Platform"), 6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") kapsamında veri sorumlusu sıfatıyla, aşağıda açıklanan kişisel verilerinizi işlemektedir.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;"><strong>İşlenen Veriler:</strong> Ad-soyad/firma unvanı, e-posta adresi, telefon numarası, üyelik ve abonelik bilgileri, fuar başvuru içerikleri ve platform kullanım kayıtları.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;"><strong>İşleme Amaçları:</strong> Üyelik ve giriş işlemlerinin yürütülmesi, fuar başvurularının iletilmesi ve takibi, abonelik/ödeme süreçlerinin yönetilmesi, yasal yükümlülüklerin yerine getirilmesi ve hizmet kalitesinin artırılması.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;"><strong>Hukuki Sebep:</strong> KVKK m.5/2 kapsamında sözleşmenin kurulması ve ifası, hukuki yükümlülük ve meşru menfaat.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;"><strong>Saklama Süresi:</strong> Verileriniz, işleme amacının gerektirdiği süre boyunca ve ilgili mevzuatta öngörülen zamanaşımı süreleri saklı kalmak kaydıyla saklanır.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;"><strong>Haklarınız (KVKK m.11):</strong> Kişisel verilerinizin işlenip işlenmediğini öğrenme, işlenmişse buna ilişkin bilgi talep etme, işlenme amacını öğrenme, yurt içinde/yurt dışında aktarıldığı üçüncü kişileri bilme, eksik/yanlış işlenmişse düzeltilmesini isteme, silinmesini/yok edilmesini isteme, itiraz etme ve zararın giderilmesini talep etme haklarına sahipsiniz.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7;"><strong>Başvuru:</strong> Bu haklarınızı kullanmak için destek@fuarsicili.com adresinden bizimle iletişime geçebilirsiniz.</p>
+  `,
+  privacy: `
+    <h3 style="margin-bottom:14px;">Gizlilik Politikası</h3>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;">Bu Gizlilik Politikası, Fuar Sicili platformunu kullanırken toplanan bilgilerin nasıl işlendiğini açıklar.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;"><strong>1. Toplanan Bilgiler:</strong> Üyelik sırasında sağladığınız ad, e-posta, telefon ve firma bilgileri; kullanım sırasında oluşan başvuru, favori ve tercih verileri.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;"><strong>2. Kullanım Amacı:</strong> Bilgileriniz yalnızca hizmetin sunulması, fuar başvurularının ilgili taraflara iletilmesi, abonelik yönetimi ve platformun geliştirilmesi amacıyla kullanılır.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;"><strong>3. Paylaşım:</strong> Katılım başvurusu yaptığınızda, ilgili fuarın organizatörüyle iletişim bilgileriniz paylaşılır. Bunun dışında bilgileriniz açık rızanız olmadan üçüncü taraflarla paylaşılmaz; yalnızca yasal zorunluluk hâlinde yetkili mercilerle paylaşılabilir.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;"><strong>4. Veri Güvenliği:</strong> Verileriniz makul teknik ve idari tedbirlerle korunur; ancak internet üzerinden veri iletiminin %100 güvenli olduğu garanti edilemez.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7;"><strong>5. İletişim:</strong> Bu politika hakkında sorularınız için destek@fuarsicili.com adresinden ulaşabilirsiniz.</p>
+  `,
+  terms: `
+    <h3 style="margin-bottom:14px;">Kullanım Şartları</h3>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;"><strong>1. Hizmetin Tanımı:</strong> Fuar Sicili, TOBB kaynaklı fuar verilerini derleyen, firmalar ve organizatörler için başvuru ve listeleme imkânı sunan bağımsız bir platformdur.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;"><strong>2. Üyelik:</strong> Platforma üye olurken verdiğiniz bilgilerin doğru ve güncel olduğunu kabul edersiniz. Hesap güvenliğinden (şifre gizliliği dahil) kullanıcı sorumludur.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;"><strong>3. Kullanıcı Yükümlülükleri:</strong> Platformu yalnızca hukuka uygun amaçlarla kullanmayı, yanıltıcı fuar veya başvuru bilgisi paylaşmamayı kabul edersiniz.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;"><strong>4. Sorumluluk Sınırı:</strong> Platform, TOBB verilerinden derlenen bilgilerin güncelliğini sağlamak için makul çaba gösterir ancak üçüncü taraf (organizatör/fuar) kaynaklı hata, gecikme veya değişikliklerden sorumlu tutulamaz. Platform, TOBB'un resmi bir sistemi değildir.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;"><strong>5. Fikri Mülkiyet:</strong> Platformun tasarımı, yazılımı ve marka unsurları Fuar Sicili'ne aittir.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7;"><strong>6. Değişiklikler:</strong> Bu şartlar zaman zaman güncellenebilir; güncel hâli her zaman bu sayfada yayınlanır.</p>
+  `,
+  refund: `
+    <h3 style="margin-bottom:14px;">Mesafeli Satış Sözleşmesi &amp; İptal/İade Politikası</h3>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;"><strong>1. Taraflar ve Konu:</strong> İşbu metin, Fuar Sicili üzerinden satın alınan Premium Üyelik, Öne Çıkan İlan ve Başvuru Takip Hizmeti gibi dijital hizmetlerin satışına ilişkin genel esasları düzenler.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;"><strong>2. Ücretlendirme:</strong> Abonelik ücretleri aylık olarak, tek seferlik hizmetler ise satın alma anında tahsil edilir. Güncel fiyatlar Üyelik &amp; Fiyatlar sayfasında yer alır.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;"><strong>3. Cayma Hakkı:</strong> Mevzuat gereği, ifasına başlanmış dijital hizmetlerde (örn. hizmet aktifleştirildikten sonra) cayma hakkı kullanılamayabilir. Henüz kullanılmaya başlanmamış aylık abonelikler için satın alma tarihinden itibaren 14 gün içinde iptal talebinde bulunulabilir.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;"><strong>4. Abonelik İptali:</strong> Aylık abonelikler, kullanıcı panelinden dilediğiniz zaman iptal edilebilir. İptal, bir sonraki fatura döneminden itibaren geçerli olur; iptal anına kadar kullanılan süre için ücret iadesi yapılmaz.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7; margin-bottom:12px;"><strong>5. İade Süreci:</strong> Hatalı tahsilat veya teknik bir sorun durumunda destek@fuarsicili.com adresine başvurmanız hâlinde talebiniz incelenir ve haklı bulunması durumunda iade işlemi başlatılır.</p>
+    <p style="font-size:13px; color:var(--slate); line-height:1.7;"><strong>6. İletişim:</strong> Sorularınız için destek@fuarsicili.com adresinden bize ulaşabilirsiniz.</p>
+  `
+};
+
+function setLegalTab(tab){
+  CURRENT_LEGAL_TAB = tab;
+  ['kvkk','privacy','terms','refund'].forEach(t => {
+    const btn = document.getElementById('legalTab-'+t);
+    if(btn) btn.classList.toggle('active', t === tab);
+  });
+  const content = document.getElementById('legalContent');
+  if(content) content.innerHTML = LEGAL_TEXTS[tab] || '';
+}
+
+function setPlanTab(tab){
+  PLAN_TAB = tab;
+  document.getElementById('tabCompanyPlans').classList.toggle('active', tab==='company');
+  document.getElementById('tabOrgPlans').classList.toggle('active', tab==='org');
+  document.getElementById('companyPlans').style.display = tab==='company' ? 'grid' : 'none';
+  document.getElementById('orgPlans').style.display = tab==='org' ? 'grid' : 'none';
+}
+
+const BANK_TRANSFER_INFO = {
+  bank: 'Örnek Banka A.Ş. (buraya gerçek banka adınızı yazın)',
+  holder: 'Fuar Sicili Ticaret Ltd. Şti. (buraya gerçek hesap adınızı yazın)',
+  iban: 'TR00 0000 0000 0000 0000 0000 00 (buraya gerçek IBAN\'ınızı yazın)'
+};
+
+async function startSubscribeFlow(){
+  const u = await currentUser();
+  if(!u){
+    REG_ROLE = 'company'; await go('auth'); setAuthTab('register'); setRegRole('company');
+    return;
+  }
+  if(u.role === 'organizer'){ subscribe('organizer','featured'); return; }
+  subscribe('company','premium');
+}
+
+async function subscribe(kind, planId){
+  const u = await currentUser();
+  if(!u){
+    REG_ROLE = kind === 'organizer' ? 'organizer' : 'company';
+    await go('auth'); setAuthTab('register'); setRegRole(REG_ROLE);
+    return;
+  }
+  if(planId === 'free'){ return; }
+  renderPaymentModal(planId, 'card');
+}
+
+function renderPaymentModal(planId, method){
+  const price = 499;
+  const planName = planId === 'premium' ? 'Premium Üyelik' : 'Öne Çıkan İlan';
+  const refCode = 'FS-' + planId.toUpperCase().slice(0,4) + '-' + Math.random().toString(36).slice(2,7).toUpperCase();
+
+  const methodBody = method === 'card' ? `
+    <div style="background:var(--paper-2); border-radius:10px; padding:16px; margin:14px 0; display:flex; justify-content:space-between; align-items:center;">
+      <span style="font-weight:700;">${planName}</span>
+      <span class="mono" style="font-size:17px; font-weight:700;">₺${price}/ay</span>
+    </div>
+    <p style="font-size:11.5px; color:var(--slate); margin-bottom:14px; line-height:1.5;">Kart ile güvenli ödeme altyapısı entegrasyonu tamamlandığında bu adımda gerçek tahsilat yapılacaktır. Şu an onaylarsanız hesabınız demo olarak aktifleştirilir.</p>
+    <div class="modal-close-row">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Vazgeç</button>
+      <button class="btn btn-primary btn-sm" onclick="confirmSubscribe('${planId}')">Ödemeyi Onayla</button>
+    </div>` : `
+    <div style="background:var(--paper-2); border-radius:10px; padding:16px; margin:14px 0;">
+      <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0;"><span style="color:var(--slate);">Banka</span><span style="font-weight:700;">${escapeHtml(BANK_TRANSFER_INFO.bank)}</span></div>
+      <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0;"><span style="color:var(--slate);">Hesap Sahibi</span><span style="font-weight:700;">${escapeHtml(BANK_TRANSFER_INFO.holder)}</span></div>
+      <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0;"><span style="color:var(--slate);">IBAN</span><span class="mono" style="font-weight:700;">${escapeHtml(BANK_TRANSFER_INFO.iban)}</span></div>
+      <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-top:1px dashed var(--line); margin-top:6px; padding-top:8px;"><span style="color:var(--slate);">Tutar</span><span style="font-weight:700;">₺${price}</span></div>
+      <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0;"><span style="color:var(--slate);">Açıklama / Referans</span><span class="mono" style="font-weight:700;">${refCode}</span></div>
+    </div>
+    <p style="font-size:11.5px; color:var(--slate); margin-bottom:14px; line-height:1.5;">Transferi yaparken açıklama kısmına yukarıdaki referans kodunu eklemeyi unutmayın. Transferiniz onaylandıktan sonra üyeliğiniz aktifleşecektir.</p>
+    <div class="modal-close-row">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Vazgeç</button>
+      <button class="btn btn-primary btn-sm" onclick="submitBankTransfer('${planId}','${refCode}')">Transferi Yaptım, Bildir</button>
+    </div>`;
+
+  showModal(`
+    <h3>Ödeme Yöntemi</h3>
+    <div class="role-switch" style="margin-top:12px;">
+      <button class="${method==='card'?'active':''}" onclick="renderPaymentModal('${planId}','card')">💳 Kredi Kartı</button>
+      <button class="${method==='iban'?'active':''}" onclick="renderPaymentModal('${planId}','iban')">🏦 Havale / EFT</button>
+    </div>
+    ${methodBody}
+  `);
+}
+
+async function confirmSubscribe(planId){
+  const u = await currentUser();
+  const users = await sGet('users:list', true) || [];
+  const idx = users.findIndex(x => x.email === u.email);
+  if(idx > -1){
+    users[idx].tier = planId;
+    await sSet('users:list', users, true);
+  }
+  closeModal();
+  showToast('Abonelik aktifleştirildi (demo). Panelinizden durumu görebilirsiniz.');
+  await go('dashboard');
+}
+
+async function confirmCancelSubscription(){
+  const u = await currentUser();
+  const planLabel = u.tier === 'featured' ? 'Öne Çıkan İlan' : 'Premium Üyelik';
+  showModal(`
+    <h3>Aboneliği İptal Et</h3>
+    <p style="font-size:13.5px; color:var(--slate); line-height:1.6;"><strong>${planLabel}</strong> aboneliğinizi iptal etmek üzeresiniz. İptal, bir sonraki fatura döneminden itibaren geçerli olur; kalan süre için ücret iadesi yapılmaz (detaylar için <button onclick="closeModal(); go('legal'); setLegalTab('refund');" style="background:none;border:none;color:var(--coral);text-decoration:underline;cursor:pointer;font-size:inherit;padding:0;">İptal/İade Politikası</button>).</p>
+    <div class="modal-close-row">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Vazgeç</button>
+      <button class="btn btn-sm" style="background:var(--coral); color:#fff;" onclick="cancelSubscriptionNow()">Evet, İptal Et</button>
+    </div>
+  `);
+}
+async function cancelSubscriptionNow(){
+  const u = await currentUser();
+  const users = await sGet('users:list', true) || [];
+  const idx = users.findIndex(x => x.email === u.email);
+  if(idx > -1){
+    users[idx].tier = 'free';
+    await sSet('users:list', users, true);
+  }
+  closeModal();
+  showToast('Aboneliğiniz iptal edildi.');
+  await renderDashboard();
+}
+
+function openChangePassword(){
+  showModal(`
+    <h3>Şifremi Değiştir</h3>
+    <div class="field"><label>Mevcut Şifre</label><input type="password" id="cpOld"></div>
+    <div class="field"><label>Yeni Şifre</label><input type="password" id="cpNew"></div>
+    <div class="field"><label>Yeni Şifre (Tekrar)</label><input type="password" id="cpNew2"></div>
+    <div id="cpMsg"></div>
+    <div class="modal-close-row">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Vazgeç</button>
+      <button class="btn btn-primary btn-sm" onclick="submitPasswordChange()">Şifreyi Güncelle</button>
+    </div>
+  `);
+}
+async function submitPasswordChange(){
+  const u = await currentUser();
+  const oldPass = document.getElementById('cpOld').value;
+  const newPass = document.getElementById('cpNew').value;
+  const newPass2 = document.getElementById('cpNew2').value;
+  if(oldPass !== u.pass){
+    document.getElementById('cpMsg').innerHTML = `<div class="msg err">Mevcut şifre hatalı.</div>`;
+    return;
+  }
+  if(!newPass || newPass.length < 4){
+    document.getElementById('cpMsg').innerHTML = `<div class="msg err">Yeni şifre en az 4 karakter olmalı.</div>`;
+    return;
+  }
+  if(newPass !== newPass2){
+    document.getElementById('cpMsg').innerHTML = `<div class="msg err">Yeni şifreler eşleşmiyor.</div>`;
+    return;
+  }
+  const users = await sGet('users:list', true) || [];
+  const idx = users.findIndex(x => x.email === u.email);
+  if(idx > -1){
+    users[idx].pass = newPass;
+    await sSet('users:list', users, true);
+  }
+  closeModal();
+  showToast('Şifreniz güncellendi.');
+}
+
+async function submitBankTransfer(planId, refCode){
+  const u = await currentUser();
+  const requests = await sGet('paymentRequests:list', true) || [];
+  requests.push({
+    id: crypto.randomUUID(), email:u.email, name:u.name, plan:planId, amount:499,
+    method:'havale', refCode, status:'pending', createdAt:new Date().toISOString()
+  });
+  await sSet('paymentRequests:list', requests, true);
+  closeModal();
+  showToast('Transfer bildiriminiz alındı. Onaylandığında üyeliğiniz aktifleşecektir.');
+}
+
+/* ============================================================
+   AUTH
+   ============================================================ */
+function setAuthTab(tab){
+  document.getElementById('authTabLogin').classList.toggle('active', tab==='login');
+  document.getElementById('authTabRegister').classList.toggle('active', tab==='register');
+  document.getElementById('loginForm').style.display = tab==='login' ? 'block':'none';
+  document.getElementById('registerForm').style.display = tab==='register' ? 'block':'none';
+  document.getElementById('authMsg').innerHTML = '';
+}
+function setRegRole(role){
+  REG_ROLE = role;
+  document.getElementById('regRoleCompany').classList.toggle('active', role==='company');
+  document.getElementById('regRoleOrganizer').classList.toggle('active', role==='organizer');
+}
+function authMsg(text, type){
+  document.getElementById('authMsg').innerHTML = `<div class="msg ${type}">${text}</div>`;
+}
+async function doLogin(){
+  const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+  const pass = document.getElementById('loginPass').value;
+  const users = await sGet('users:list', true) || [];
+  const u = users.find(x => x.email === email && x.pass === pass);
+  if(!u){ authMsg('E-posta veya şifre hatalı.', 'err'); return; }
+  SESSION_EMAIL = u.email;
+  await sSet('session:current', {email:u.email}, false);
+  await go('dashboard');
+}
+
+function openForgotPassword(){
+  showModal(`
+    <h3>Şifremi Unuttum</h3>
+    <p style="font-size:13px; color:var(--slate); line-height:1.6; margin-bottom:14px;">Hesabınıza kayıtlı e-posta adresinizi girin, size yeni bir geçici şifre oluşturalım.</p>
+    <div class="field"><label>E-posta</label><input type="email" id="fpEmail" placeholder="ornek@firma.com"></div>
+    <div class="modal-close-row">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Vazgeç</button>
+      <button class="btn btn-primary btn-sm" onclick="resetPasswordDemo()">Geçici Şifre Oluştur</button>
+    </div>
+  `);
+}
+async function resetPasswordDemo(){
+  const email = document.getElementById('fpEmail').value.trim().toLowerCase();
+  const users = await sGet('users:list', true) || [];
+  const idx = users.findIndex(x => x.email === email);
+  if(idx < 0){
+    showModal(`
+      <h3>Şifremi Unuttum</h3>
+      <div class="msg err">Bu e-posta ile kayıtlı bir hesap bulunamadı.</div>
+      <div class="modal-close-row"><button class="btn btn-ghost btn-sm" onclick="closeModal()">Kapat</button></div>
+    `);
+    return;
+  }
+  const tempPass = Math.random().toString(36).slice(2,8).toUpperCase();
+  users[idx].pass = tempPass;
+  await sSet('users:list', users, true);
+  showModal(`
+    <h3>Geçici Şifreniz Oluşturuldu</h3>
+    <p style="font-size:13px; color:var(--slate); line-height:1.6; margin-bottom:6px;">Gerçek ortamda bu şifre e-posta adresinize gönderilir. Bu bir demo ortamı olduğu için geçici şifrenizi burada gösteriyoruz:</p>
+    <div style="background:var(--paper-2); border-radius:10px; padding:16px; text-align:center; margin:14px 0;">
+      <span class="mono" style="font-size:20px; font-weight:700; letter-spacing:0.1em;">${tempPass}</span>
+    </div>
+    <p style="font-size:12px; color:var(--slate); margin-bottom:14px;">Giriş yaptıktan sonra panelinizden şifrenizi değiştirebilirsiniz.</p>
+    <div class="modal-close-row">
+      <button class="btn btn-primary btn-sm" onclick="closeModal(); setAuthTab('login');">Girişe Dön</button>
+    </div>
+  `);
+}
+
+async function doRegister(){
+  const name = document.getElementById('regName').value.trim();
+  const email = document.getElementById('regEmail').value.trim().toLowerCase();
+  const pass = document.getElementById('regPass').value;
+  const phone = document.getElementById('regPhone').value.trim();
+  if(!name || !email || !pass){ authMsg('Lütfen tüm zorunlu alanları doldurun.', 'err'); return; }
+  const users = await sGet('users:list', true) || [];
+  if(users.some(u => u.email === email)){ authMsg('Bu e-posta ile zaten bir hesap var.', 'err'); return; }
+  const newUser = {id: crypto.randomUUID(), name, email, pass, role:REG_ROLE, tier:'free', phone, favorites:[]};
+  users.push(newUser);
+  await sSet('users:list', users, true);
+  SESSION_EMAIL = email;
+  await sSet('session:current', {email}, false);
+  await go('dashboard');
+}
+async function doLogout(){
+  SESSION_EMAIL = null;
+  await sSet('session:current', {email:null}, false);
+  await go('home');
+}
+
+/* ============================================================
+   APPLY MODAL (fuara katılım başvurusu)
+   ============================================================ */
+const FREE_APPLICATION_LIMIT = 5;
+
+async function openApplyModal(fairId){
+  const u = await currentUser();
+  const fairs = await sGet('fairs:list', true) || [];
+  const f = fairs.find(x => x.id === fairId);
+  if(!f) return;
+  if(!u){
+    REG_ROLE='company'; await go('auth'); setAuthTab('register'); setRegRole('company');
+    showToast('Katılım başvurusu yapmak için önce üye olmanız gerekiyor.', 'err');
+    return;
+  }
+  const apps = await sGet('applications:list', true) || [];
+  const usedCount = apps.filter(a => a.email === u.email && a.type === 'katilim').length;
+  const isUnlimited = u.tier === 'premium' || u.role === 'admin';
+
+  if(!isUnlimited && usedCount >= FREE_APPLICATION_LIMIT){
+    showModal(`
+      <h3>Ücretsiz Başvuru Hakkınız Doldu</h3>
+      <p style="font-size:13.5px; color:var(--slate); line-height:1.6;">Ücretsiz planda toplam <strong>${FREE_APPLICATION_LIMIT} katılım başvurusu</strong> hakkınız bulunuyor ve bunu kullandınız. Sınırsız başvuru yapabilmek için Premium'a geçebilirsiniz.</p>
+      <div class="modal-close-row">
+        <button class="btn btn-ghost btn-sm" onclick="closeModal()">Kapat</button>
+        <button class="btn btn-primary btn-sm" onclick="closeModal(); subscribe('company','premium')">Premium'a Geç — ₺499/ay</button>
+      </div>
+    `);
+    return;
+  }
+
+  const remainingNote = isUnlimited ? 'Premium üyeliğinizle sınırsız başvuru hakkınız var.' : `Bu, ücretsiz planınızdaki ${usedCount+1}. / ${FREE_APPLICATION_LIMIT} başvurunuz olacak.`;
+
+  const basicRows = [
+    ['Sicil No', f.registryNo],
+    ['Sektör', f.sector],
+    ['Şehir', f.city],
+    ['Fuar Alanı', f.venue || '—'],
+    ['Tarih', `${formatDate(f.start)} – ${formatDate(f.end)}`],
+    ['İhracat Desteği', f.exportSupport ? 'Var' : 'Belirtilmemiş']
+  ];
+  const premiumRows = [
+    ['Organizatör', f.organizerName || (f.source==='organizer' ? 'Platform üzerinden kayıtlı organizatör' : '—')],
+    ['İletişim E-postası', f.contactEmail || '—'],
+    ['İletişim Telefonu', f.contactPhone || '—']
+  ];
+  const canSeeFullDetails = isUnlimited; // premium üye veya admin
+
+  const rowHtml = (rows) => rows.map(([k,v]) => `<div style="display:flex; justify-content:space-between; gap:10px; font-size:12.5px; padding:4px 0; border-bottom:1px dashed var(--line);"><span style="color:var(--slate);">${k}</span><span style="font-weight:600; text-align:right;">${escapeHtml(String(v))}</span></div>`).join('');
+
+  showModal(`
+    <h3>Katılım Başvurusu</h3>
+    <div style="background:var(--paper-2); border-radius:10px; padding:14px 16px; margin-bottom:14px;">
+      <div style="font-weight:700; font-size:14.5px; margin-bottom:8px;">${escapeHtml(f.name)}</div>
+      ${rowHtml(basicRows)}
+      ${canSeeFullDetails ? rowHtml(premiumRows) : `
+        <div style="margin-top:10px; padding:10px 12px; background:#fff; border:1px dashed var(--amber-deep); border-radius:8px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+          <span style="font-size:12px; color:var(--slate);">🔒 Organizatör ve iletişim bilgileri Premium üyelere özeldir</span>
+          <button class="btn btn-amber btn-sm" onclick="closeModal(); subscribe('company','premium')">Premium'a Geç</button>
+        </div>`}
+      ${canSeeFullDetails && f.description ? `<div style="font-size:12.5px; color:var(--slate); margin-top:10px; line-height:1.5;">${escapeHtml(f.description)}</div>` : ''}
+    </div>
+    <p style="font-size:12px; color:var(--amber-deep); margin-bottom:14px;">${remainingNote}</p>
+    <div class="field"><label>Not (stand büyüklüğü, ürün grubu vb. — opsiyonel)</label><textarea id="applyMsg" placeholder="Örn. 12 m² stand, tekstil aksesuar grubu"></textarea></div>
+    <div class="modal-close-row">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Vazgeç</button>
+      <button class="btn btn-primary btn-sm" onclick="submitApply('${f.id}')">Başvuruyu Gönder</button>
+    </div>
+  `);
+}
+
+async function submitApply(fairId){
+  const u = await currentUser();
+  const fairs = await sGet('fairs:list', true) || [];
+  const f = fairs.find(x => x.id === fairId);
+  if(!f) return;
+  const msg = document.getElementById('applyMsg').value.trim();
+  const apps = await sGet('applications:list', true) || [];
+  apps.push({
+    id: crypto.randomUUID(), type:'katilim', fairId, fairName:f.name,
+    companyName:u.name, email:u.email, phone:u.phone||'', message: msg||'',
+    status:'pending', createdAt: new Date().toISOString()
+  });
+  await sSet('applications:list', apps, true);
+
+  const users = await sGet('users:list', true) || [];
+  const adminUser = users.find(x => x.role === 'admin');
+  const adminEmail = adminUser ? adminUser.email : 'admin@fuarsicili.com';
+  const organizerEmail = f.source === 'organizer' ? f.ownerEmail : null;
+  const toList = [adminEmail, organizerEmail].filter(Boolean).join(',');
+  const subject = `Yeni Katılım Başvurusu — ${f.name}`;
+  const body = `Fuar: ${f.name}\nSicil No: ${f.registryNo}\nŞehir: ${f.city}\n\nBaşvuran Firma: ${u.name}\nE-posta: ${u.email}\nTelefon: ${u.phone||'-'}\n\nNot:\n${msg||'-'}\n\n(Bu e-posta Fuar Sicili platformu üzerinden oluşturulmuştur.)`;
+  const mailtoLink = `mailto:${toList}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+  closeModal();
+  showModal(`
+    <h3>Başvurunuz Alındı</h3>
+    <p style="font-size:13.5px; color:var(--slate); line-height:1.6; margin-bottom:16px;">Başvurunuz sicile kaydedildi. İlgili tarafları (yönetici${organizerEmail ? ' ve organizatör' : ''}) e-posta ile bilgilendirmek için aşağıdaki butona tıklayın — bu, kayıtlı e-posta istemcinizi (Outlook, Gmail vb.) alıcılar ve mesaj önceden doldurulmuş şekilde açar.</p>
+    <div class="modal-close-row" style="justify-content:space-between;">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Kapat</button>
+      <a class="btn btn-primary btn-sm" href="${mailtoLink}" onclick="closeModal()">📧 E-postayı Gönder</a>
+    </div>
+  `);
+}
+
+/* ============================================================
+   DASHBOARD
+   ============================================================ */
+async function renderDashboard(){
+  const u = await currentUser();
+  if(!u){ await go('auth'); return; }
+  document.getElementById('dashWho').textContent = u.name;
+  document.getElementById('dashTier').textContent = roleLabel(u);
+  document.getElementById('dashTitle').textContent = u.role === 'admin' ? 'Yönetici Paneli' : (u.role === 'organizer' ? 'Organizatör Paneli' : 'Firma Paneli');
+  document.getElementById('dashSubtitle').textContent = u.role === 'admin' ? 'TOBB verilerini yönetin, başvuruları onaylayın' : (u.role === 'organizer' ? 'Fuarlarınızı ekleyin ve başvuruları takip edin' : 'Fuar takibinizi ve başvurularınızı yönetin');
+
+  const tabs = u.role === 'admin'
+    ? [['overview','Genel Bakış'],['upload','Excel Yükle'],['pending','Onay Bekleyenler'],['allfairs','Tüm Fuarlar'],['applications','Tüm Başvurular'],['services','Takip Hizmeti Talepleri'],['payments','Ödeme Bildirimleri'],['users','Kullanıcılar']]
+    : u.role === 'organizer'
+    ? [['overview','Genel Bakış'],['newfair','Fuarımı Ekle'],['myfairs','Fuarlarım'],['leads','Gelen Başvurular']]
+    : [['overview','Genel Bakış'],['favorites','Favorilerim'],['notifications','Bildirimler'],['subscription','Aboneliğim'],['myapps','Başvurularım']];
+
+  if(!tabs.find(t=>t[0]===DASH_TAB)) DASH_TAB = tabs[0][0];
+  document.getElementById('dashSideNav').innerHTML = tabs.map(t => `<button class="${DASH_TAB===t[0]?'active':''}" onclick="setDashTab('${t[0]}')">${t[1]}</button>`).join('');
+
+  await renderDashMain(u);
+}
+function roleLabel(u){
+  if(u.role==='admin') return 'Yönetici';
+  if(u.role==='organizer') return u.tier==='featured' ? 'Organizatör · Öne Çıkan' : 'Organizatör · Standart';
+  return u.tier==='premium' ? 'Premium Üye' : 'Ücretsiz Üye';
+}
+async function setDashTab(tab){ DASH_TAB = tab; await renderDashboard(); }
+
+async function renderDashMain(u){
+  const main = document.getElementById('dashMain');
+  const fairs = await sGet('fairs:list', true) || [];
+  const apps = await sGet('applications:list', true) || [];
+
+  if(u.role === 'admin'){
+    if(DASH_TAB === 'overview'){
+      const pending = fairs.filter(f=>f.status==='pending').length;
+      const serviceOrders = await sGet('serviceOrders:list', true) || [];
+      const serviceRevenue = serviceOrders.reduce((sum,o) => sum + (o.price||0), 0);
+      main.innerHTML = `
+        <div class="stat-row">
+          <div class="stat"><div class="n">${fairs.length}</div><div class="l">Toplam Fuar</div></div>
+          <div class="stat"><div class="n">${pending}</div><div class="l">Onay Bekleyen</div></div>
+          <div class="stat"><div class="n">${apps.length}</div><div class="l">Toplam Başvuru</div></div>
+          <div class="stat"><div class="n">₺${serviceRevenue}</div><div class="l">Takip Hizmeti Geliri</div></div>
+        </div>
+        <p style="color:var(--slate); font-size:13.5px;">Soldaki menüden TOBB Excel dosyanızı yükleyebilir, organizatör başvurularını onaylayabilir, gelen başvuruları ve takip hizmeti taleplerini inceleyebilirsiniz.</p>`;
+    } else if(DASH_TAB === 'upload'){
+      main.innerHTML = `
+        <h3 style="margin-bottom:14px;">TOBB Fuar Excel Yükleme</h3>
+        <p style="color:var(--slate); font-size:13px; margin-bottom:18px;">Sütunlar herhangi bir sırada olabilir; sistem şu başlıkları tanımaya çalışır: <strong>Fuar Adı, Sektör, Şehir, Yer/Salon, Başlangıç, Bitiş, Açıklama, Destek</strong>. Eşleşmeyen dosyalarda ilk 6 sütun sırasıyla kullanılır.</p>
+        <div class="upload-zone">
+          <div style="font-size:15px; font-weight:700; margin-bottom:6px;">.xlsx / .xls / .csv dosyasını seçin</div>
+          <div style="font-size:12.5px; color:var(--slate); margin-bottom:16px;">Dosyadaki fuarlar onaylı olarak doğrudan sicile eklenir</div>
+          <input type="file" id="excelInput" accept=".xlsx,.xls,.csv" onchange="handleExcelUpload(event)">
+          <button class="btn btn-amber" onclick="document.getElementById('excelInput').click()">Dosya Seç</button>
+        </div>
+        <div id="uploadResult" style="margin-top:16px;"></div>`;
+    } else if(DASH_TAB === 'pending'){
+      const pend = fairs.filter(f=>f.status==='pending');
+      main.innerHTML = `<h3 style="margin-bottom:14px;">Organizatör Başvuruları — Onay Bekleyen Fuarlar</h3>` + (pend.length===0 ? `<div class="empty"><h3>Bekleyen başvuru yok</h3></div>` : `
+        <table class="admin-table"><thead><tr><th>Fuar</th><th>Şehir/Sektör</th><th>Tarih</th><th>İşlem</th></tr></thead><tbody>
+        ${pend.map(f=>`<tr>
+          <td><strong>${escapeHtml(f.name)}</strong><div class="regno mono">${f.registryNo}</div></td>
+          <td><span class="city-name">${escapeHtml(f.city)}</span><br>${escapeHtml(f.sector)}</td>
+          <td>${formatDate(f.start)} – ${formatDate(f.end)}</td>
+          <td class="row-actions">
+            <button class="btn btn-sm" style="background:var(--success-light); color:var(--success);" onclick="approveFair('${f.id}')">Onayla</button>
+            <button class="btn btn-sm" style="background:var(--coral-light); color:var(--coral);" onclick="rejectFair('${f.id}')">Reddet</button>
+          </td>
+        </tr>`).join('')}
+        </tbody></table>`);
+    } else if(DASH_TAB === 'allfairs'){
+      const approvedFairs = fairs.filter(f=>f.status==='approved');
+      main.innerHTML = `<h3 style="margin-bottom:14px;">Tüm Fuarlar — Sicil Yönetimi</h3><p style="color:var(--slate); font-size:12.5px; margin-bottom:14px;">Excel ile yüklenen veya organizatörlerin eklediği, yayında olan tüm fuarları buradan düzenleyebilir veya kaldırabilirsiniz.</p>` + (approvedFairs.length===0 ? `<div class="empty"><h3>Henüz yayınlanmış fuar yok</h3></div>` : `
+        <table class="admin-table"><thead><tr><th>Fuar</th><th>Şehir/Sektör</th><th>Tarih</th><th>Kaynak</th><th>İşlem</th></tr></thead><tbody>
+        ${approvedFairs.map(f=>`<tr>
+          <td><strong>${escapeHtml(f.name)}</strong><div class="regno mono">${f.registryNo}</div></td>
+          <td><span class="city-name">${escapeHtml(f.city)}</span><br>${escapeHtml(f.sector)}</td>
+          <td>${formatDate(f.start)} – ${formatDate(f.end)}</td>
+          <td>${f.source==='organizer' ? 'Organizatör' : 'Excel/Admin'}${f.featured ? '<br><span class="tag featured">Öne Çıkan</span>' : ''}</td>
+          <td class="row-actions">
+            <button class="btn btn-sm btn-ghost" onclick="openEditFairModal('${f.id}')">Düzenle</button>
+            <button class="btn btn-sm" style="background:var(--coral-light); color:var(--coral);" onclick="confirmDeleteFair('${f.id}')">Sil</button>
+          </td>
+        </tr>`).join('')}
+        </tbody></table>`);
+    } else if(DASH_TAB === 'applications'){
+      main.innerHTML = `<h3 style="margin-bottom:14px;">Tüm Başvurular</h3>` + (apps.length===0 ? `<div class="empty"><h3>Henüz başvuru yok</h3></div>` : `
+        <table class="admin-table"><thead><tr><th>Tür</th><th>Firma</th><th>Fuar</th><th>İletişim</th><th>Not</th><th>Durum</th></tr></thead><tbody>
+        ${apps.slice().reverse().map(a=>`<tr>
+          <td>${a.type==='katilim' ? 'Katılım' : 'Fuar Listeleme'}</td>
+          <td>${escapeHtml(a.companyName)}</td>
+          <td>${escapeHtml(a.fairName||'—')}</td>
+          <td>${escapeHtml(a.email)}<br>${escapeHtml(a.phone||'')}</td>
+          <td style="max-width:220px;">${escapeHtml(a.message||'—')}</td>
+          <td>
+            <select onchange="updateApplicationStatus('${a.id}', this.value)" style="font-size:12px; padding:5px 8px;">
+              <option value="pending" ${a.status==='pending'?'selected':''}>Beklemede</option>
+              <option value="reviewing" ${a.status==='reviewing'?'selected':''}>İnceleniyor</option>
+              <option value="approved" ${a.status==='approved'?'selected':''}>Onaylandı</option>
+              <option value="rejected" ${a.status==='rejected'?'selected':''}>Reddedildi</option>
+            </select>
+          </td>
+        </tr>`).join('')}
+        </tbody></table>`);
+    } else if(DASH_TAB === 'services'){
+      const orders = (await sGet('serviceOrders:list', true) || []).slice().reverse();
+      const totalRevenue = orders.reduce((sum,o) => sum + (o.price||0), 0);
+      main.innerHTML = `
+        <div class="stat-row" style="grid-template-columns:repeat(2,1fr);">
+          <div class="stat"><div class="n">${orders.length}</div><div class="l">Toplam Talep</div></div>
+          <div class="stat"><div class="n">₺${totalRevenue}</div><div class="l">Hizmet Geliri</div></div>
+        </div>
+        <h3 style="margin-bottom:14px;">Takip Hizmeti Talepleri</h3>` + (orders.length===0 ? `<div class="empty"><h3>Henüz talep yok</h3><p>Ana sayfadaki "Başvuru Takip Hizmeti" satın alındığında burada görünecek.</p></div>` : `
+        <table class="admin-table"><thead><tr><th>Firma</th><th>Fuar</th><th>İletişim</th><th>Not</th><th>Ücret</th><th>Durum</th></tr></thead><tbody>
+        ${orders.map(o=>`<tr>
+          <td>${escapeHtml(o.companyName)}</td>
+          <td>${escapeHtml(o.fairName||'—')}</td>
+          <td>${escapeHtml(o.email)}<br>${escapeHtml(o.phone||'')}</td>
+          <td style="max-width:200px;">${escapeHtml(o.note||'—')}</td>
+          <td class="mono">₺${o.price}</td>
+          <td>
+            <select onchange="updateServiceOrderStatus('${o.id}', this.value)" style="font-size:12px; padding:5px 8px;">
+              <option value="paid" ${o.status==='paid'?'selected':''}>Ödendi</option>
+              <option value="in_progress" ${o.status==='in_progress'?'selected':''}>Takip Ediliyor</option>
+              <option value="completed" ${o.status==='completed'?'selected':''}>Tamamlandı</option>
+            </select>
+          </td>
+        </tr>`).join('')}
+        </tbody></table>`);
+    } else if(DASH_TAB === 'payments'){
+      const payments = (await sGet('paymentRequests:list', true) || []).slice().reverse();
+      main.innerHTML = `<h3 style="margin-bottom:6px;">Havale / EFT Ödeme Bildirimleri</h3><p style="color:var(--slate); font-size:12.5px; margin-bottom:14px;">Banka hesabınıza gelen transferi kontrol ettikten sonra onaylayın — onay verdiğinizde kullanıcının üyeliği otomatik aktifleşir.</p>` + (payments.length===0 ? `<div class="empty"><h3>Henüz bildirim yok</h3></div>` : `
+        <table class="admin-table"><thead><tr><th>Kullanıcı</th><th>Plan</th><th>Tutar</th><th>Referans</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>
+        ${payments.map(p=>`<tr>
+          <td>${escapeHtml(p.name)}<br><span style="color:var(--slate); font-size:11.5px;">${escapeHtml(p.email)}</span></td>
+          <td>${p.plan==='premium'?'Premium Üyelik':'Öne Çıkan İlan'}</td>
+          <td class="mono">₺${p.amount}</td>
+          <td class="mono">${escapeHtml(p.refCode)}</td>
+          <td><span class="tag ${p.status==='confirmed'?'approved':'pending'}">${p.status==='confirmed'?'Onaylandı':'Bekliyor'}</span></td>
+          <td>${p.status==='confirmed' ? '—' : `<button class="btn btn-sm" style="background:var(--success-light); color:var(--success);" onclick="confirmBankTransfer('${p.id}')">Onayla</button>`}</td>
+        </tr>`).join('')}
+        </tbody></table>`);
+    } else if(DASH_TAB === 'users'){
+      const allUsers = (await sGet('users:list', true) || []).filter(x => x.role !== 'admin' || x.email === u.email);
+      main.innerHTML = `<h3 style="margin-bottom:14px;">Kullanıcılar</h3><p style="color:var(--slate); font-size:12.5px; margin-bottom:14px;">Rol/üyelik değiştirebilir veya hesabı kaldırabilirsiniz.</p>` + (allUsers.length===0 ? `<div class="empty"><h3>Kayıtlı kullanıcı yok</h3></div>` : `
+        <table class="admin-table"><thead><tr><th>Ad</th><th>E-posta</th><th>Rol</th><th>Üyelik</th><th>İşlem</th></tr></thead><tbody>
+        ${allUsers.map(x=>`<tr>
+          <td>${escapeHtml(x.name)}</td>
+          <td>${escapeHtml(x.email)}</td>
+          <td>${x.role==='admin'?'Yönetici':x.role==='organizer'?'Organizatör':'Firma'}</td>
+          <td>${escapeHtml(x.tier||'free')}</td>
+          <td class="row-actions">
+            ${x.role==='admin' ? '<span style="font-size:12px; color:var(--slate);">Bu hesap</span>' : `
+            <button class="btn btn-sm btn-ghost" onclick="openEditUserModal('${x.id}')">Düzenle</button>
+            <button class="btn btn-sm" style="background:var(--coral-light); color:var(--coral);" onclick="confirmDeleteUser('${x.id}')">Sil</button>`}
+          </td>
+        </tr>`).join('')}
+        </tbody></table>`);
+    }
+    return;
+  }
+
+  if(u.role === 'organizer'){
+    const mine = fairs.filter(f => f.source==='organizer' && f.ownerEmail===u.email);
+    const myLeads = apps.filter(a => mine.some(f=>f.id===a.fairId));
+    if(DASH_TAB === 'overview'){
+      main.innerHTML = `
+        <div class="stat-row">
+          <div class="stat"><div class="n">${mine.length}</div><div class="l">Eklediğim Fuar</div></div>
+          <div class="stat"><div class="n">${mine.filter(f=>f.status==='approved').length}</div><div class="l">Yayında</div></div>
+          <div class="stat"><div class="n">${mine.filter(f=>f.status==='pending').length}</div><div class="l">Onay Bekleyen</div></div>
+          <div class="stat"><div class="n">${myLeads.length}</div><div class="l">Gelen Başvuru</div></div>
+        </div>
+        <p style="color:var(--slate); font-size:13.5px;">Yeni bir fuarı sicile eklemek için "Fuarımı Ekle" sekmesini kullanın. Görünürlüğünüzü artırmak isterseniz Üyelik sayfasından "Öne Çıkan İlan" paketine geçebilirsiniz.</p>
+        ${u.tier==='featured' ? `<button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="confirmCancelSubscription()">Öne Çıkan İlanı İptal Et</button>` : ''}
+        <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--line);">
+          <button class="btn btn-outline btn-sm" onclick="openChangePassword()">Şifremi Değiştir</button>
+        </div>`;
+    } else if(DASH_TAB === 'newfair'){
+      main.innerHTML = `
+        <h3 style="margin-bottom:16px;">Fuarımı Ekle — Listeleme Başvurusu</h3>
+        <div class="field"><label>Fuar Adı</label><input type="text" id="nfName"></div>
+        <div class="field"><label>Sektör</label><select id="nfSector">${SECTORS.map(s=>`<option>${s}</option>`).join('')}</select></div>
+        <div class="field"><label>Şehir</label><select id="nfCity">${CITIES.map(c=>`<option>${c}</option>`).join('')}</select></div>
+        <div class="field"><label>Fuar Alanı / Salon</label><input type="text" id="nfVenue"></div>
+        <div class="field"><label>Başlangıç Tarihi</label><input type="date" id="nfStart"></div>
+        <div class="field"><label>Bitiş Tarihi</label><input type="date" id="nfEnd"></div>
+        <div class="field"><label>Açıklama</label><textarea id="nfDesc"></textarea></div>
+        <div class="field"><label>İletişim E-postası (başvuranların göreceği)</label><input type="email" id="nfContactEmail" placeholder="ornek@organizator.com"></div>
+        <div class="field"><label>İletişim Telefonu</label><input type="tel" id="nfContactPhone"></div>
+        <div class="field"><label><input type="checkbox" id="nfSupport" style="width:auto; margin-right:6px;">İhracat destekli fuar</label></div>
+        <button class="btn btn-primary" onclick="submitNewFair()">Onaya Gönder</button>`;
+    } else if(DASH_TAB === 'myfairs'){
+      main.innerHTML = `<h3 style="margin-bottom:14px;">Fuarlarım</h3>` + (mine.length===0 ? `<div class="empty"><h3>Henüz fuar eklemediniz</h3><p>"Fuarımı Ekle" sekmesinden başlayın.</p></div>` : `
+        <table class="admin-table"><thead><tr><th>Fuar</th><th>Tarih</th><th>Durum</th></tr></thead><tbody>
+        ${mine.map(f=>`<tr><td>${escapeHtml(f.name)}<div class="regno mono">${f.registryNo}</div></td><td>${formatDate(f.start)}</td><td><span class="tag ${f.status==='approved'?'approved':'pending'}">${f.status==='approved'?'Yayında':'Onay Bekliyor'}</span></td></tr>`).join('')}
+        </tbody></table>`);
+    } else if(DASH_TAB === 'leads'){
+      main.innerHTML = `<h3 style="margin-bottom:14px;">Gelen Başvurular</h3>` + (myLeads.length===0 ? `<div class="empty"><h3>Henüz başvuru yok</h3></div>` : `
+        <table class="admin-table"><thead><tr><th>Firma</th><th>Fuar</th><th>İletişim</th><th>Not</th></tr></thead><tbody>
+        ${myLeads.map(a=>`<tr><td>${escapeHtml(a.companyName)}</td><td>${escapeHtml(a.fairName)}</td><td>${escapeHtml(a.email)}<br>${escapeHtml(a.phone||'')}</td><td>${escapeHtml(a.message||'—')}</td></tr>`).join('')}
+        </tbody></table>`);
+    }
+    return;
+  }
+
+  /* company */
+  const myApps = apps.filter(a => a.email === u.email);
+  const usedKatilim = myApps.filter(a => a.type === 'katilim').length;
+  const isUnlimitedApps = u.tier === 'premium';
+  if(DASH_TAB === 'overview'){
+    main.innerHTML = `
+      <div class="stat-row">
+        <div class="stat"><div class="n">${myApps.length}</div><div class="l">Başvurum</div></div>
+        <div class="stat"><div class="n" style="font-size:16px;">${roleLabel(u)}</div><div class="l">Üyelik</div></div>
+        <div class="stat"><div class="n">${isUnlimitedApps ? '∞' : Math.max(0, FREE_APPLICATION_LIMIT - usedKatilim)}</div><div class="l">Kalan Ücretsiz Başvuru</div></div>
+      </div>
+      <p style="color:var(--slate); font-size:13.5px;">Fuar Takvimi'nden ilgilendiğiniz fuarlara katılım başvurusu yapabilir, Premium'a geçerek ihracat destek detaylarına ve erken bildirimlere ulaşabilirsiniz.</p>
+      <button class="btn btn-outline" style="margin-top:10px;" onclick="go('calendar')">Fuar Takvimine Git</button>`;
+  } else if(DASH_TAB === 'favorites'){
+    const favIds = u.favorites || [];
+    const favFairs = fairs.filter(f => favIds.includes(f.id) && f.status === 'approved');
+    main.innerHTML = `<h3 style="margin-bottom:14px;">Favorilerim</h3>` + (favFairs.length===0 ? `<div class="empty"><h3>Henüz favori fuarınız yok</h3><p>Fuar Takvimi'nde ★ ikonuna tıklayarak fuarları favorilerinize ekleyin.</p></div>` : `
+      <table class="admin-table"><thead><tr><th>Fuar</th><th>Şehir</th><th>Tarih</th><th></th></tr></thead><tbody>
+      ${favFairs.map(f=>`<tr><td>${escapeHtml(f.name)}<div class="regno mono">${f.registryNo}</div></td><td class="city-name">${escapeHtml(f.city)}</td><td>${formatDate(f.start)}</td><td><button class="btn btn-primary btn-sm" onclick="openApplyModal('${f.id}')">Başvur</button></td></tr>`).join('')}
+      </tbody></table>`);
+  } else if(DASH_TAB === 'notifications'){
+    if(u.tier !== 'premium'){
+      main.innerHTML = `
+        <h3 style="margin-bottom:10px;">Bildirimler</h3>
+        <div class="empty"><h3>Bu özellik Premium üyelere özeldir</h3><p>Yeni eklenen fuarlar için erken bildirim almak üzere Premium'a geçin.</p>
+        <button class="btn btn-primary" style="margin-top:14px;" onclick="subscribe('company','premium')">Premium'a Geç — ₺499/ay</button></div>`;
+    } else {
+      const recent = fairs.filter(f => f.status==='approved' && f.createdAt && (Date.now() - new Date(f.createdAt).getTime()) < 14*24*3600*1000);
+      recent.sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
+      main.innerHTML = `<h3 style="margin-bottom:14px;">Son 14 Günde Sicile Eklenenler</h3>` + (recent.length===0 ? `<div class="empty"><h3>Yeni bildirim yok</h3><p>Yeni bir fuar eklendiğinde burada görünecek.</p></div>` : recent.map(f=>`
+        <div class="msg ok" style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+          <div><strong>${escapeHtml(f.name)}</strong><br><span style="color:var(--slate); font-size:12px;"><span class="city-name">${escapeHtml(f.city)}</span> · ${formatDate(f.start)}${f.exportSupport ? ' · İhracat Destekli' : ''}</span></div>
+          <button class="btn btn-primary btn-sm" onclick="openApplyModal('${f.id}')">Başvur</button>
+        </div>`).join(''));
+    }
+  } else if(DASH_TAB === 'subscription'){
+    main.innerHTML = `
+      <h3 style="margin-bottom:10px;">Aboneliğim</h3>
+      <p style="color:var(--slate); font-size:13.5px; margin-bottom:10px;">Mevcut plan: <strong>${roleLabel(u)}</strong></p>
+      <p style="color:var(--slate); font-size:13px; margin-bottom:18px;">${isUnlimitedApps ? 'Premium üyeliğinizle sınırsız katılım başvurusu yapabilirsiniz.' : `Ücretsiz planda toplam <strong>${FREE_APPLICATION_LIMIT}</strong> katılım başvurusu hakkınız var. Şimdiye kadar <strong>${usedKatilim}</strong> başvuru yaptınız (kalan: <strong>${Math.max(0, FREE_APPLICATION_LIMIT - usedKatilim)}</strong>).`}</p>
+      ${u.tier==='premium'
+        ? `<div class="msg ok">Premium üyeliğiniz aktif. Erken bildirimler, favori takibi ve sınırsız başvuru açık.</div>
+           <button class="btn btn-ghost btn-sm" onclick="confirmCancelSubscription()">Aboneliği İptal Et</button>`
+        : `<button class="btn btn-primary" onclick="subscribe('company','premium')">Premium'a Geç — ₺499/ay</button>`}
+      <div style="margin-top:24px; padding-top:18px; border-top:1px solid var(--line);">
+        <button class="btn btn-outline btn-sm" onclick="openChangePassword()">Şifremi Değiştir</button>
+      </div>`;
+  } else if(DASH_TAB === 'myapps'){
+    main.innerHTML = `<h3 style="margin-bottom:14px;">Başvurularım</h3>` + (myApps.length===0 ? `<div class="empty"><h3>Henüz başvurunuz yok</h3></div>` : `
+      <table class="admin-table"><thead><tr><th>Fuar</th><th>Tarih</th><th>Not</th><th>Durum</th></tr></thead><tbody>
+      ${myApps.slice().reverse().map(a=>`<tr><td>${escapeHtml(a.fairName)}</td><td>${formatDate(a.createdAt.slice(0,10))}</td><td>${escapeHtml(a.message||'—')}</td><td><span class="tag ${statusTagClass(a.status)}">${statusLabel(a.status)}</span></td></tr>`).join('')}
+      </tbody></table>`);
+  }
+}
+
+/* ---- admin actions ---- */
+async function approveFair(id){
+  const fairs = await sGet('fairs:list', true) || [];
+  const f = fairs.find(x=>x.id===id); if(f) f.status='approved';
+  await sSet('fairs:list', fairs, true);
+  showToast('Fuar onaylandı ve sicile yayınlandı.');
+  await renderDashMain(await currentUser());
+}
+async function rejectFair(id){
+  let fairs = await sGet('fairs:list', true) || [];
+  fairs = fairs.filter(x=>x.id!==id);
+  await sSet('fairs:list', fairs, true);
+  showToast('Başvuru reddedildi.', 'err');
+  await renderDashMain(await currentUser());
+}
+
+function statusTagClass(status){
+  if(status === 'approved') return 'approved';
+  if(status === 'reviewing') return 'reviewing';
+  if(status === 'rejected') return 'rejected';
+  return 'pending';
+}
+function statusLabel(status){
+  if(status === 'approved') return 'Onaylandı';
+  if(status === 'reviewing') return 'İnceleniyor';
+  if(status === 'rejected') return 'Reddedildi';
+  return 'Beklemede';
+}
+async function updateApplicationStatus(id, status){
+  const apps = await sGet('applications:list', true) || [];
+  const a = apps.find(x => x.id === id);
+  if(!a) return;
+  a.status = status;
+  await sSet('applications:list', apps, true);
+  showToast('Başvuru durumu güncellendi.');
+}
+async function updateServiceOrderStatus(id, status){
+  const orders = await sGet('serviceOrders:list', true) || [];
+  const o = orders.find(x => x.id === id);
+  if(!o) return;
+  o.status = status;
+  await sSet('serviceOrders:list', orders, true);
+  showToast('Hizmet talebi durumu güncellendi.');
+}
+async function confirmBankTransfer(id){
+  const payments = await sGet('paymentRequests:list', true) || [];
+  const p = payments.find(x => x.id === id);
+  if(!p) return;
+  p.status = 'confirmed';
+  await sSet('paymentRequests:list', payments, true);
+  const users = await sGet('users:list', true) || [];
+  const idx = users.findIndex(x => x.email === p.email);
+  if(idx > -1){
+    users[idx].tier = p.plan;
+    await sSet('users:list', users, true);
+  }
+  showToast('Transfer onaylandı, kullanıcının üyeliği aktifleştirildi.');
+  await renderDashMain(await currentUser());
+}
+
+/* ---- admin: manage users ---- */
+async function openEditUserModal(id){
+  const users = await sGet('users:list', true) || [];
+  const x = users.find(u2 => u2.id === id);
+  if(!x) return;
+  showModal(`
+    <h3>Kullanıcıyı Düzenle</h3>
+    <p style="font-size:13px; color:var(--slate); margin-bottom:14px;">${escapeHtml(x.name)} · ${escapeHtml(x.email)}</p>
+    <div class="field"><label>Rol</label>
+      <select id="euRole">
+        <option value="company" ${x.role==='company'?'selected':''}>Firma</option>
+        <option value="organizer" ${x.role==='organizer'?'selected':''}>Organizatör</option>
+      </select>
+    </div>
+    <div class="field"><label>Üyelik / Plan</label>
+      <select id="euTier">
+        <option value="free" ${x.tier==='free'?'selected':''}>Ücretsiz</option>
+        <option value="premium" ${x.tier==='premium'?'selected':''}>Premium</option>
+        <option value="featured" ${x.tier==='featured'?'selected':''}>Öne Çıkan (Organizatör)</option>
+      </select>
+    </div>
+    <div class="modal-close-row">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Vazgeç</button>
+      <button class="btn btn-primary btn-sm" onclick="saveUserEdit('${id}')">Kaydet</button>
+    </div>
+  `);
+}
+async function saveUserEdit(id){
+  const users = await sGet('users:list', true) || [];
+  const x = users.find(u2 => u2.id === id);
+  if(!x) return;
+  x.role = document.getElementById('euRole').value;
+  x.tier = document.getElementById('euTier').value;
+  await sSet('users:list', users, true);
+  closeModal();
+  showToast('Kullanıcı güncellendi.');
+  await renderDashMain(await currentUser());
+}
+async function confirmDeleteUser(id){
+  const users = await sGet('users:list', true) || [];
+  const x = users.find(u2 => u2.id === id);
+  if(!x) return;
+  showModal(`
+    <h3>Kullanıcıyı Kaldır</h3>
+    <p style="font-size:13.5px; color:var(--slate); line-height:1.6;">"${escapeHtml(x.name)}" (${escapeHtml(x.email)}) hesabı kalıcı olarak silinecek. Bu işlem geri alınamaz.</p>
+    <div class="modal-close-row">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Vazgeç</button>
+      <button class="btn btn-sm" style="background:var(--coral); color:#fff;" onclick="deleteUserAdmin('${id}')">Evet, Sil</button>
+    </div>
+  `);
+}
+async function deleteUserAdmin(id){
+  let users = await sGet('users:list', true) || [];
+  users = users.filter(x => x.id !== id);
+  await sSet('users:list', users, true);
+  closeModal();
+  showToast('Kullanıcı silindi.', 'err');
+  await renderDashMain(await currentUser());
+}
+
+/* ---- admin: edit / delete any fair ---- */
+async function openEditFairModal(id){
+  const fairs = await sGet('fairs:list', true) || [];
+  const f = fairs.find(x=>x.id===id);
+  if(!f) return;
+  showModal(`
+    <h3>Fuarı Düzenle</h3>
+    <div class="field"><label>Fuar Adı</label><input type="text" id="efName" value="${escapeHtml(f.name)}"></div>
+    <div class="field"><label>Sektör</label><select id="efSector">${SECTORS.map(s=>`<option ${s===f.sector?'selected':''}>${s}</option>`).join('')}</select></div>
+    <div class="field"><label>Şehir</label><select id="efCity">${CITIES.map(c=>`<option ${c===f.city?'selected':''}>${c}</option>`).join('')}</select></div>
+    <div class="field"><label>Fuar Alanı / Salon</label><input type="text" id="efVenue" value="${escapeHtml(f.venue||'')}"></div>
+    <div class="field"><label>Başlangıç Tarihi</label><input type="date" id="efStart" value="${f.start}"></div>
+    <div class="field"><label>Bitiş Tarihi</label><input type="date" id="efEnd" value="${f.end}"></div>
+    <div class="field"><label>Açıklama</label><textarea id="efDesc">${escapeHtml(f.description||'')}</textarea></div>
+    <div class="field"><label>İletişim E-postası</label><input type="email" id="efContactEmail" value="${escapeHtml(f.contactEmail||'')}"></div>
+    <div class="field"><label>İletişim Telefonu</label><input type="tel" id="efContactPhone" value="${escapeHtml(f.contactPhone||'')}"></div>
+    <div class="field"><label>Organizatör Adı</label><input type="text" id="efOrganizerName" value="${escapeHtml(f.organizerName||'')}"></div>
+    <div class="field"><label><input type="checkbox" id="efSupport" style="width:auto; margin-right:6px;" ${f.exportSupport?'checked':''}>İhracat destekli fuar</label></div>
+    <div class="field"><label><input type="checkbox" id="efFeatured" style="width:auto; margin-right:6px;" ${f.featured?'checked':''}>Öne Çıkan olarak işaretle</label></div>
+    <div class="modal-close-row">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Vazgeç</button>
+      <button class="btn btn-primary btn-sm" onclick="saveFairEdit('${id}')">Kaydet</button>
+    </div>
+  `);
+}
+async function saveFairEdit(id){
+  const fairs = await sGet('fairs:list', true) || [];
+  const f = fairs.find(x=>x.id===id);
+  if(!f) return;
+  f.name = document.getElementById('efName').value.trim() || f.name;
+  f.sector = document.getElementById('efSector').value;
+  f.city = document.getElementById('efCity').value;
+  f.venue = document.getElementById('efVenue').value;
+  f.start = document.getElementById('efStart').value || f.start;
+  f.end = document.getElementById('efEnd').value || f.end;
+  f.description = document.getElementById('efDesc').value;
+  f.contactEmail = document.getElementById('efContactEmail').value.trim();
+  f.contactPhone = document.getElementById('efContactPhone').value.trim();
+  f.organizerName = document.getElementById('efOrganizerName').value.trim();
+  f.exportSupport = document.getElementById('efSupport').checked;
+  f.featured = document.getElementById('efFeatured').checked;
+  await sSet('fairs:list', fairs, true);
+  closeModal();
+  showToast('Fuar bilgileri güncellendi.');
+  await renderDashMain(await currentUser());
+}
+async function confirmDeleteFair(id){
+  const fairs = await sGet('fairs:list', true) || [];
+  const f = fairs.find(x=>x.id===id);
+  if(!f) return;
+  showModal(`
+    <h3>Fuarı Kaldır</h3>
+    <p style="font-size:13.5px; color:var(--slate); line-height:1.6;">"${escapeHtml(f.name)}" sicilden kalıcı olarak kaldırılacak. Bu işlem geri alınamaz.</p>
+    <div class="modal-close-row">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Vazgeç</button>
+      <button class="btn btn-sm" style="background:var(--coral); color:#fff;" onclick="deleteFairAdmin('${id}')">Evet, Kaldır</button>
+    </div>
+  `);
+}
+async function deleteFairAdmin(id){
+  let fairs = await sGet('fairs:list', true) || [];
+  fairs = fairs.filter(x=>x.id!==id);
+  await sSet('fairs:list', fairs, true);
+  closeModal();
+  showToast('Fuar sicilden kaldırıldı.', 'err');
+  await renderDashMain(await currentUser());
+}
+
+/* ---- organizer: submit new fair ---- */
+async function submitNewFair(){
+  const u = await currentUser();
+  const name = document.getElementById('nfName').value.trim();
+  const start = document.getElementById('nfStart').value;
+  const end = document.getElementById('nfEnd').value;
+  if(!name || !start || !end){ showToast('Lütfen fuar adı ile başlangıç/bitiş tarihlerini girin.', 'err'); return; }
+  const fairs = await sGet('fairs:list', true) || [];
+  const fair = {
+    id: crypto.randomUUID(), registryNo: makeRegistryNo(fairs.length+1),
+    name, sector: document.getElementById('nfSector').value, city: document.getElementById('nfCity').value,
+    venue: document.getElementById('nfVenue').value, start, end,
+    description: document.getElementById('nfDesc').value,
+    contactEmail: document.getElementById('nfContactEmail').value.trim(),
+    contactPhone: document.getElementById('nfContactPhone').value.trim(),
+    exportSupport: document.getElementById('nfSupport').checked,
+    source:'organizer', ownerEmail: u.email, status:'pending', featured: u.tier==='featured', createdAt: new Date().toISOString()
+  };
+  fairs.push(fair);
+  await sSet('fairs:list', fairs, true);
+  showToast('Fuarınız onaya gönderildi.');
+  DASH_TAB = 'myfairs';
+  await renderDashboard();
+}
+
+/* ---- excel upload (admin) ---- */
+function pickField(row, candidates){
+  const keys = Object.keys(row);
+  for(const cand of candidates){
+    const k = keys.find(k => k.toLowerCase().trim().includes(cand));
+    if(k) return row[k];
+  }
+  return null;
+}
+function excelDateToISO(val){
+  if(!val) return '';
+  if(typeof val === 'number'){
+    const d = XLSX.SSF.parse_date_code(val);
+    if(d) return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+  }
+  const parsed = new Date(val);
+  if(!isNaN(parsed)) return parsed.toISOString().slice(0,10);
+  return '';
+}
+let PENDING_IMPORT = [];
+
+async function handleExcelUpload(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const resultBox = document.getElementById('uploadResult');
+  resultBox.innerHTML = `<div class="msg ok">Dosya okunuyor…</div>`;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try{
+      const wb = XLSX.read(e.target.result, {type:'binary', cellDates:false});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
+      if(rows.length === 0){ resultBox.innerHTML = `<div class="msg err">Dosyada okunabilir satır bulunamadı.</div>`; return; }
+
+      PENDING_IMPORT = rows.map((row, i) => {
+        const values = Object.values(row);
+        const name = pickField(row, ['fuar adı','fuar','ad ','isim']) || values[0] || `İsimsiz Fuar ${i+1}`;
+        const sector = pickField(row, ['sektör','sektor','konu']) || values[1] || 'Genel';
+        const city = pickField(row, ['şehir','sehir','il']) || values[2] || 'Belirtilmemiş';
+        const venue = pickField(row, ['yer','salon','mekan','mekân']) || values[3] || '';
+        const startRaw = pickField(row, ['başlangıç','baslangic','başlama']) || values[4] || '';
+        const endRaw = pickField(row, ['bitiş','bitis','sona erme']) || values[5] || startRaw;
+        const desc = pickField(row, ['açıklama','aciklama','not']) || '';
+        const supportRaw = (pickField(row, ['destek']) || '').toString().toLowerCase();
+        const contactEmail = pickField(row, ['e-posta','eposta','email','mail','iletişim e','iletisim e']) || '';
+        const contactPhone = pickField(row, ['telefon','tel','phone','gsm']) || '';
+        const organizerName = pickField(row, ['organizatör','organizator','düzenleyen']) || '';
+        const start = excelDateToISO(startRaw) || todayPlus(7+i);
+        const end = excelDateToISO(endRaw) || start;
+        return {
+          name:String(name), sector:String(sector), city:String(city), venue:String(venue),
+          start, end, description:String(desc),
+          exportSupport: supportRaw.includes('var') || supportRaw.includes('evet') || supportRaw.includes('yes'),
+          contactEmail:String(contactEmail), contactPhone:String(contactPhone), organizerName:String(organizerName),
+          include:true
+        };
+      });
+      renderImportPreview();
+    }catch(err){
+      console.error(err);
+      resultBox.innerHTML = `<div class="msg err">Dosya okunamadı. Lütfen .xlsx, .xls veya .csv formatında olduğundan emin olun.</div>`;
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+function renderImportPreview(){
+  const resultBox = document.getElementById('uploadResult');
+  resultBox.innerHTML = `
+    <div class="msg ok">${PENDING_IMPORT.length} satır okundu. İçe aktarmadan önce kontrol edin, istemediğiniz satırların işaretini kaldırabilirsiniz:</div>
+    <div style="max-height:320px; overflow-y:auto; border:1px solid var(--line); border-radius:10px; margin:12px 0;">
+      <table class="admin-table"><thead><tr><th></th><th>Fuar</th><th>Şehir</th><th>Tarih</th><th>İletişim</th></tr></thead><tbody>
+      ${PENDING_IMPORT.map((r,i)=>`<tr>
+        <td><input type="checkbox" ${r.include?'checked':''} onchange="togglePendingRow(${i})"></td>
+        <td>${escapeHtml(r.name)}</td>
+        <td>${escapeHtml(r.city)}</td>
+        <td>${formatDate(r.start)}</td>
+        <td>${escapeHtml(r.contactEmail||'—')}</td>
+      </tr>`).join('')}
+      </tbody></table>
+    </div>
+    <div style="display:flex; gap:10px;">
+      <button class="btn btn-primary btn-sm" onclick="commitImport()">Seçilenleri Sicile Ekle</button>
+      <button class="btn btn-ghost btn-sm" onclick="cancelImport()">Vazgeç</button>
+    </div>`;
+}
+function togglePendingRow(i){
+  if(PENDING_IMPORT[i]) PENDING_IMPORT[i].include = !PENDING_IMPORT[i].include;
+}
+function cancelImport(){
+  PENDING_IMPORT = [];
+  document.getElementById('uploadResult').innerHTML = '';
+}
+async function commitImport(){
+  const fairs = await sGet('fairs:list', true) || [];
+  let added = 0;
+  PENDING_IMPORT.filter(r => r.include).forEach(r => {
+    fairs.push({
+      id: crypto.randomUUID(), registryNo: makeRegistryNo(fairs.length+1),
+      name:r.name, sector:r.sector, city:r.city, venue:r.venue,
+      start:r.start, end:r.end, description:r.description, exportSupport:r.exportSupport,
+      contactEmail:r.contactEmail||'', contactPhone:r.contactPhone||'', organizerName:r.organizerName||'',
+      source:'admin', status:'approved', featured:false, createdAt:new Date().toISOString()
+    });
+    added++;
+  });
+  await sSet('fairs:list', fairs, true);
+  PENDING_IMPORT = [];
+  document.getElementById('uploadResult').innerHTML = `<div class="msg ok">${added} fuar sicile eklendi ve yayınlandı.</div>`;
+  showToast(`${added} fuar sicile eklendi.`);
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+(async function boot(){
+  await seedIfEmpty();
+  await initSession();
+  await go('home');
+  setPlanTab('company');
+})();
+</script>
+</body>
+</html>
