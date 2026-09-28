@@ -1,17 +1,20 @@
-// İş kuralları. Tüm fonksiyonlar bir DB taslağı üzerinde çalışır (store.tsx kopyalayıp kalıcılaştırır).
-// Gerçek bir backend'e (Supabase, Firebase, REST) geçişte bu dosya servis çağrılarıyla değiştirilebilir.
+// İş kuralları. Tüm fonksiyonlar bir DB taslağı üzerinde çalışır.
+// Cihaz içi (demo) modda doğrudan kullanılır; canlı modda aynı kurallar Supabase'deki
+// sunucu fonksiyonlarında (supabase/schema.sql) uygulanır. Arayüz availableActions'ı her iki modda da kullanır.
 import { calcBreakdown } from './commission';
 import { DELIVERY_LABEL, STATUS_META, appointmentText, tl } from './format';
 import { DISTRICTS } from './hatay';
-import type {
-  CategoryKey,
-  DB,
-  DeliveryMethod,
-  Listing,
-  ListingStatus,
-  Order,
-  OrderStatus,
-  User,
+import {
+  MAX_LISTING_PHOTOS,
+  type CategoryKey,
+  type DB,
+  type ReportReason,
+  type DeliveryMethod,
+  type Listing,
+  type ListingStatus,
+  type Order,
+  type OrderStatus,
+  type User,
 } from './types';
 
 export class ApiError extends Error {}
@@ -38,6 +41,12 @@ export const getUser = (db: DB, id: string) => db.users.find((u) => u.id === id)
 export const getListing = (db: DB, id: string) => db.listings.find((l) => l.id === id);
 export const getOrder = (db: DB, id: string) => db.orders.find((o) => o.id === id);
 
+const OPEN_STATUSES: OrderStatus[] = ['seller_pending', 'approved', 'payment_pending', 'paid'];
+
+/** İki kullanıcıdan biri diğerini engellediyse true. */
+export const isBlockedBetween = (db: DB, a: string, b: string) =>
+  db.blocks.some((x) => (x.blockerId === a && x.blockedId === b) || (x.blockerId === b && x.blockedId === a));
+
 function notify(db: DB, userId: string, title: string, body: string, orderId?: string) {
   db.notifications.unshift({ id: uid(), userId, title, body, orderId, createdAt: now(), read: false });
 }
@@ -62,15 +71,21 @@ export interface RegisterInput {
   password: string;
   district: string;
   neighborhood: string;
+  acceptedTerms: boolean;
+}
+
+/** Sunucuya gitmeden yapılabilen kayıt doğrulamaları (her iki modda da kullanılır). */
+export function validateRegisterFields(input: RegisterInput) {
+  if (input.name.trim().length < 3) fail('Lütfen ad soyad girin.');
+  if (!isEmail(normalizeEmail(input.email))) fail('Geçerli bir e-posta adresi girin.');
+  if (input.password.length < 6) fail('Şifre en az 6 karakter olmalıdır.');
+  assertLocation(input.district, input.neighborhood);
+  if (!input.acceptedTerms) fail('Devam etmek için Kullanım Koşulları ve Gizlilik Politikası’nı kabul etmelisin.');
 }
 
 export function validateRegister(db: DB, input: RegisterInput) {
-  if (input.name.trim().length < 3) fail('Lütfen ad soyad girin.');
-  const email = normalizeEmail(input.email);
-  if (!isEmail(email)) fail('Geçerli bir e-posta adresi girin.');
-  if (input.password.length < 6) fail('Şifre en az 6 karakter olmalıdır.');
-  assertLocation(input.district, input.neighborhood);
-  if (db.users.some((u) => u.email === email)) fail('Bu e-posta adresiyle kayıtlı bir hesap var.');
+  validateRegisterFields(input);
+  if (db.users.some((u) => u.email === normalizeEmail(input.email))) fail('Bu e-posta adresiyle kayıtlı bir hesap var.');
 }
 
 export function register(db: DB, input: RegisterInput, passwordHash: string): User {
@@ -87,6 +102,7 @@ export function register(db: DB, input: RegisterInput, passwordHash: string): Us
     neighborhood: input.neighborhood.trim(),
     address: '',
     availability: '',
+    acceptedTermsAt: now(),
     createdAt: now(),
   };
   db.users.push(user);
@@ -133,6 +149,21 @@ export function changePassword(db: DB, userId: string, currentHash: string, newH
   user.passwordHash = newHash;
 }
 
+/** Kullanıcının kendi hesabını silmesi (App Store / Google Play zorunluluğu). */
+export function deleteAccount(db: DB, userId: string) {
+  const open = db.orders.some((o) => (o.buyerId === userId || o.sellerId === userId) && OPEN_STATUSES.includes(o.status));
+  if (open) fail('Devam eden siparişlerin var. Hesabını silmeden önce siparişlerini tamamla veya iptal et.');
+  removeUserData(db, userId);
+}
+
+function removeUserData(db: DB, userId: string) {
+  db.users = db.users.filter((u) => u.id !== userId);
+  db.listings = db.listings.filter((l) => l.ownerId !== userId);
+  db.notifications = db.notifications.filter((n) => n.userId !== userId);
+  db.blocks = db.blocks.filter((b) => b.blockerId !== userId && b.blockedId !== userId);
+  db.reports = db.reports.filter((r) => r.reporterId !== userId);
+}
+
 /* ------------------------------ İlanlar ------------------------------ */
 
 export interface ListingInput {
@@ -140,17 +171,19 @@ export interface ListingInput {
   description: string;
   price: number;
   category: CategoryKey;
-  image?: string;
+  images: string[];
   prepTime: string;
   delivery: DeliveryMethod[];
   status: ListingStatus;
 }
 
-function validateListing(input: ListingInput) {
+export function validateListing(input: ListingInput) {
   if (input.title.trim().length < 3) fail('Başlık en az 3 karakter olmalıdır.');
   if (input.description.trim().length < 10) fail('Açıklama en az 10 karakter olmalıdır.');
   if (!Number.isFinite(input.price) || input.price <= 0) fail('Geçerli bir fiyat girin.');
+  if (input.price > 100000) fail('Fiyat çok yüksek görünüyor, lütfen kontrol et.');
   if (input.delivery.length === 0) fail('En az bir teslimat seçeneği seçmelisiniz.');
+  if (input.images.length > MAX_LISTING_PHOTOS) fail(`En fazla ${MAX_LISTING_PHOTOS} fotoğraf ekleyebilirsin.`);
 }
 
 export function saveListing(db: DB, userId: string, input: ListingInput, listingId?: string): Listing {
@@ -196,9 +229,7 @@ export function setListingStatus(db: DB, actor: User, listingId: string, status:
 export function deleteListing(db: DB, actor: User, listingId: string) {
   const l = getListing(db, listingId) ?? fail('İlan bulunamadı.');
   if (actor.role !== 'admin' && l.ownerId !== actor.id) fail('Bu ilanı silme yetkiniz yok.');
-  const open = db.orders.some(
-    (o) => o.listingId === listingId && ['seller_pending', 'approved', 'payment_pending', 'paid'].includes(o.status),
-  );
+  const open = db.orders.some((o) => o.listingId === listingId && OPEN_STATUSES.includes(o.status));
   if (open) fail('Bu ilana ait devam eden siparişler var. Önce siparişleri sonuçlandırın veya ilanı pasifleştirin.');
   db.listings = db.listings.filter((x) => x.id !== listingId);
   if (actor.role === 'admin' && l.ownerId !== actor.id) {
@@ -217,11 +248,24 @@ export interface OrderInput {
   note: string;
 }
 
+/** Sipariş açıldığında alıcı adına gönderilen otomatik ilk mesaj (randevu cihazın yerel saatiyle yazılır). */
+export function firstOrderMessage(listingTitle: string, input: Pick<OrderInput, 'appointment' | 'quantity' | 'delivery' | 'note'>) {
+  const lines = [
+    `Merhaba! “${listingTitle}” için randevulu sipariş oluşturdum 😊`,
+    `🗓 ${appointmentText(input.appointment)}`,
+    `🔢 Adet: ${input.quantity}`,
+    `🚚 Teslimat: ${DELIVERY_LABEL[input.delivery]}`,
+  ];
+  if (input.note.trim()) lines.push(`📝 Not: ${input.note.trim()}`);
+  return lines.join('\n');
+}
+
 export function createOrder(db: DB, buyerId: string, input: OrderInput): Order {
   const buyer = getUser(db, buyerId) ?? fail('Kullanıcı bulunamadı.');
   const listing = getListing(db, input.listingId) ?? fail('İlan bulunamadı.');
   if (listing.status !== 'active') fail('Bu ilan şu anda yayında değil.');
   if (listing.ownerId === buyerId) fail('Kendi ilanınıza sipariş veremezsiniz.');
+  if (isBlockedBetween(db, buyerId, listing.ownerId)) fail('Bu satıcıyla işlem yapamazsınız.');
   if (!Number.isInteger(input.quantity) || input.quantity < 1 || input.quantity > 50) fail('Adet 1 ile 50 arasında olmalıdır.');
   if (!listing.delivery.includes(input.delivery)) fail('Bu ilan seçilen teslimat yöntemini desteklemiyor.');
   if (new Date(input.appointment).getTime() < Date.now()) fail('Randevu zamanı geçmiş bir zaman olamaz.');
@@ -255,19 +299,12 @@ export function createOrder(db: DB, buyerId: string, input: OrderInput): Order {
   db.orders.unshift(order);
 
   // Sipariş açılınca otomatik ilk mesaj.
-  const lines = [
-    `Merhaba! “${listing.title}” için randevulu sipariş oluşturdum 😊`,
-    `🗓 ${appointmentText(order.appointment)}`,
-    `🔢 Adet: ${order.quantity}`,
-    `🚚 Teslimat: ${DELIVERY_LABEL[order.delivery]}`,
-  ];
-  if (order.note) lines.push(`📝 Not: ${order.note}`);
   db.messages.push({
     id: uid(),
     orderId: order.id,
     senderId: buyerId,
     receiverId: listing.ownerId,
-    text: lines.join('\n'),
+    text: firstOrderMessage(listing.title, input),
     createdAt: t,
     read: false,
   });
@@ -275,7 +312,7 @@ export function createOrder(db: DB, buyerId: string, input: OrderInput): Order {
   return order;
 }
 
-type OrderAction = 'approve' | 'reject' | 'pay' | 'cancel' | 'complete' | 'paymentApprove' | 'paymentReject';
+export type OrderAction = 'approve' | 'reject' | 'pay' | 'cancel' | 'complete' | 'paymentApprove' | 'paymentReject';
 
 /** Kullanıcının bu sipariş üzerinde yapabileceği işlemler. */
 export function availableActions(order: Order, user: User): OrderAction[] {
@@ -318,6 +355,7 @@ export function orderAction(db: DB, actor: User, orderId: string, action: OrderA
 
   switch (action) {
     case 'approve':
+      if (order.delivery === 'pickup') order.pickupAddress = actor.address || `${actor.neighborhood}, ${actor.district}`;
       transition(db, order, 'approved', actor.id);
       notify(db, order.buyerId, 'Siparişin onaylandı ✅', `${title} satıcı tarafından onaylandı. Ödeme adımına geçebilirsin.`, order.id);
       break;
@@ -377,7 +415,9 @@ export function sendMessage(db: DB, senderId: string, orderId: string, text: str
   if (senderId !== order.buyerId && senderId !== order.sellerId) fail('Bu sohbete mesaj gönderemezsiniz.');
   const body = text.trim();
   if (!body) return;
+  if (body.length > 1000) fail('Mesaj en fazla 1000 karakter olabilir.');
   const receiverId = senderId === order.buyerId ? order.sellerId : order.buyerId;
+  if (isBlockedBetween(db, senderId, receiverId)) fail('Bu kullanıcıyla mesajlaşamazsınız.');
   db.messages.push({ id: uid(), orderId, senderId, receiverId, text: body, createdAt: now(), read: false });
   const sender = getUser(db, senderId);
   notify(db, receiverId, `${MESSAGE_PREFIX} ${sender?.name ?? 'Yeni mesaj'}`, body.length > 80 ? body.slice(0, 80) + '…' : body, orderId);
@@ -399,6 +439,48 @@ export function markChatRead(db: DB, userId: string, orderId: string) {
     }
   }
   return changed;
+}
+
+export function markNotificationsRead(db: DB, userId: string) {
+  db.notifications.forEach((n) => n.userId === userId && (n.read = true));
+}
+
+/* ------------------------------ Şikayet ve engelleme ------------------------------ */
+
+export interface ReportInput {
+  targetType: 'listing' | 'user';
+  targetId: string;
+  reason: ReportReason;
+  note: string;
+}
+
+export function reportContent(db: DB, reporterId: string, input: ReportInput) {
+  const exists = input.targetType === 'listing' ? !!getListing(db, input.targetId) : !!getUser(db, input.targetId);
+  if (!exists) fail('Şikayet edilen içerik bulunamadı.');
+  if (input.targetType === 'user' && input.targetId === reporterId) fail('Kendini şikayet edemezsin.');
+  const dup = db.reports.some((r) => r.reporterId === reporterId && r.targetId === input.targetId && r.status === 'open');
+  if (dup) fail('Bu içerik için açık bir şikayetin zaten var. İnceleniyor.');
+  db.reports.unshift({ id: uid(), reporterId, ...input, note: input.note.trim().slice(0, 500), status: 'open', createdAt: now() });
+  for (const admin of db.users.filter((u) => u.role === 'admin')) {
+    notify(db, admin.id, 'Yeni şikayet 🚩', input.targetType === 'listing' ? 'Bir ilan şikayet edildi.' : 'Bir kullanıcı şikayet edildi.');
+  }
+}
+
+export function blockUser(db: DB, blockerId: string, blockedId: string) {
+  if (blockerId === blockedId) fail('Kendini engelleyemezsin.');
+  if (!getUser(db, blockedId)) fail('Kullanıcı bulunamadı.');
+  if (db.blocks.some((b) => b.blockerId === blockerId && b.blockedId === blockedId)) return;
+  db.blocks.push({ blockerId, blockedId, createdAt: now() });
+}
+
+export function unblockUser(db: DB, blockerId: string, blockedId: string) {
+  db.blocks = db.blocks.filter((b) => !(b.blockerId === blockerId && b.blockedId === blockedId));
+}
+
+export function resolveReport(db: DB, actor: User, reportId: string) {
+  assertAdmin(actor);
+  const r = db.reports.find((x) => x.id === reportId) ?? fail('Şikayet bulunamadı.');
+  r.status = 'resolved';
 }
 
 /* ------------------------------ Admin ------------------------------ */
@@ -427,17 +509,14 @@ export function setUserRole(db: DB, actor: User, userId: string, role: User['rol
 export function deleteUser(db: DB, actor: User, userId: string) {
   assertAdmin(actor);
   if (actor.id === userId) fail('Kendi hesabınızı silemezsiniz.');
-  const open = db.orders.some(
-    (o) => (o.buyerId === userId || o.sellerId === userId) && ['seller_pending', 'approved', 'payment_pending', 'paid'].includes(o.status),
-  );
+  const open = db.orders.some((o) => (o.buyerId === userId || o.sellerId === userId) && OPEN_STATUSES.includes(o.status));
   if (open) fail('Kullanıcının devam eden siparişleri var. Önce siparişleri sonuçlandırın veya kullanıcıyı pasifleştirin.');
-  db.users = db.users.filter((u) => u.id !== userId);
-  db.listings = db.listings.filter((l) => l.ownerId !== userId);
-  db.notifications = db.notifications.filter((n) => n.userId !== userId);
+  removeUserData(db, userId);
 }
 
 export function adminStats(db: DB) {
   const counted = db.orders.filter((o) => o.status === 'paid' || o.status === 'completed');
+  const sum = (f: (o: Order) => number) => Math.round(counted.reduce((s, o) => s + f(o), 0) * 100) / 100;
   return {
     users: db.users.length,
     activeUsers: db.users.filter((u) => u.active).length,
@@ -446,9 +525,10 @@ export function adminStats(db: DB) {
     orders: db.orders.length,
     pendingPayments: db.payments.filter((p) => p.status === 'pending').length,
     completedOrders: db.orders.filter((o) => o.status === 'completed').length,
-    grossVolume: counted.reduce((s, o) => s + o.buyerTotal, 0),
-    commission: counted.reduce((s, o) => s + o.buyerFee + o.sellerFee, 0),
-    buyerFees: counted.reduce((s, o) => s + o.buyerFee, 0),
-    sellerFees: counted.reduce((s, o) => s + o.sellerFee, 0),
+    openReports: db.reports.filter((r) => r.status === 'open').length,
+    grossVolume: sum((o) => o.buyerTotal),
+    commission: sum((o) => o.buyerFee + o.sellerFee),
+    buyerFees: sum((o) => o.buyerFee),
+    sellerFees: sum((o) => o.sellerFee),
   };
 }

@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { router } from 'expo-router';
-import { useState, type ComponentProps, type ReactNode } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { setStatusBarStyle } from 'expo-status-bar';
+import { useCallback, useState, type ComponentProps, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -23,6 +24,16 @@ import type { OrderStatus } from '../lib/types';
 export type IconName = ComponentProps<typeof Ionicons>['name'];
 
 /* ------------------------------ Yerleşim ------------------------------ */
+
+/** Koyu (ana renk) başlıklı ekranlarda durum çubuğu yazılarını açık renk yapar. */
+export function useLightStatusBar() {
+  useFocusEffect(
+    useCallback(() => {
+      setStatusBarStyle('light');
+      return () => setStatusBarStyle('dark');
+    }, []),
+  );
+}
 
 export function Screen({
   children,
@@ -137,7 +148,7 @@ export function Divider({ style }: { style?: StyleProp<ViewStyle> }) {
 
 /* ------------------------------ Kontroller ------------------------------ */
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'outline';
+type ButtonVariant = 'primary' | 'accent' | 'secondary' | 'ghost' | 'danger' | 'success' | 'outline';
 
 export function Button({
   title,
@@ -160,7 +171,8 @@ export function Button({
 }) {
   const palette: Record<ButtonVariant, { bg: string; fg: string; border?: string }> = {
     primary: { bg: colors.primary, fg: '#fff' },
-    secondary: { bg: colors.creamDeep, fg: colors.primaryDark },
+    accent: { bg: colors.accent, fg: '#fff' },
+    secondary: { bg: colors.primarySoft, fg: colors.primaryDark },
     ghost: { bg: 'transparent', fg: colors.primaryDark },
     danger: { bg: colors.dangerBg, fg: colors.danger },
     success: { bg: colors.success, fg: '#fff' },
@@ -176,7 +188,7 @@ export function Button({
         styles.btn,
         small && styles.btnSmall,
         { backgroundColor: p.bg, borderColor: p.border ?? 'transparent', borderWidth: p.border ? 1 : 0 },
-        variant === 'primary' && !off && shadowSoft,
+        (variant === 'primary' || variant === 'accent') && !off && shadowSoft,
         pressed && !off && { opacity: 0.85, transform: [{ scale: 0.98 }] },
         off && { opacity: 0.55 },
         style,
@@ -312,7 +324,7 @@ export function Segmented<T extends string>({
 
 export function Toggle({ label, value, onChange, icon, description }: { label: string; value: boolean; onChange: (v: boolean) => void; icon?: IconName; description?: string }) {
   return (
-    <Pressable onPress={() => onChange(!value)} style={[styles.toggle, value && { borderColor: colors.primaryLight, backgroundColor: '#fff7ed' }]} accessibilityRole="checkbox" accessibilityState={{ checked: value }}>
+    <Pressable onPress={() => onChange(!value)} style={[styles.toggle, value && { borderColor: colors.primaryLight, backgroundColor: colors.primarySoft }]} accessibilityRole="checkbox" accessibilityState={{ checked: value }}>
       {icon && <Ionicons name={icon} size={20} color={value ? colors.primary : colors.muted} />}
       <View style={{ flex: 1 }}>
         <Text style={{ fontWeight: '700', color: colors.ink }}>{label}</Text>
@@ -328,12 +340,14 @@ export function Toggle({ label, value, onChange, icon, description }: { label: s
 /* ------------------------------ Gösterim ------------------------------ */
 
 const TONES = {
-  yellow: { bg: colors.warningBg, fg: '#a16207' },
+  yellow: { bg: colors.warningBg, fg: colors.warning },
   blue: { bg: colors.infoBg, fg: colors.info },
-  green: { bg: colors.successBg, fg: '#15803d' },
+  green: { bg: colors.successBg, fg: colors.success },
   red: { bg: colors.dangerBg, fg: colors.danger },
   gray: { bg: colors.neutralBg, fg: colors.neutral },
-  orange: { bg: colors.creamDeep, fg: colors.primaryDark },
+  orange: { bg: colors.accentSoft, fg: colors.accentDark },
+  teal: { bg: colors.primarySoft, fg: colors.primaryDark },
+  honey: { bg: colors.honeySoft, fg: colors.warning },
 };
 export type Tone = keyof typeof TONES;
 

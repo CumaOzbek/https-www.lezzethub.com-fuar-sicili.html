@@ -1,27 +1,42 @@
 import { Platform } from 'react-native';
 
+// Palet: güven veren koyu zeytin-petrol yeşili ana renk; sıcak turuncu yalnızca marka vurgusu
+// (logo, fiyat, "İlan Ver"); krem-kum tonlarında sıcak nötrler ve kömür grisi metin.
 export const colors = {
-  primary: '#ea580c',
-  primaryDark: '#c2410c',
-  primaryLight: '#fb923c',
-  cream: '#fffaf5',
-  creamDeep: '#ffedd5',
-  peach: '#fed7aa',
-  card: '#ffffff',
-  ink: '#2b1a10',
-  inkSoft: '#5b4636',
-  muted: '#9a8474',
-  line: '#f3e2d2',
-  danger: '#dc2626',
-  dangerBg: '#fee2e2',
-  success: '#16a34a',
-  successBg: '#dcfce7',
-  warning: '#ca8a04',
-  warningBg: '#fef9c3',
-  info: '#2563eb',
-  infoBg: '#dbeafe',
-  neutral: '#6b7280',
-  neutralBg: '#f3f4f6',
+  // Ana renk (butonlar, başlıklar, seçili durumlar)
+  primary: '#1F5E57',
+  primaryDark: '#15433E',
+  primaryLight: '#4E8C83',
+  primarySoft: '#E4EFEB',
+  /** Ana renk zemin üzerinde ikincil (soluk) yazı rengi. */
+  onPrimaryMuted: '#CFE3DE',
+  // Marka vurgusu (sıcaklık): logo, fiyatlar, öne çıkan eylem
+  accent: '#E07335',
+  accentDark: '#B9551F',
+  accentSoft: '#FCEDE1',
+  // Bal sarısı: rozet ve küçük vurgular
+  honey: '#E6A532',
+  honeySoft: '#FBF1DB',
+  // Sıcak nötrler
+  cream: '#FAF7F2',
+  creamDeep: '#F1EBE1',
+  peach: '#E3D8C7',
+  card: '#FFFFFF',
+  ink: '#1E2A29',
+  inkSoft: '#4B5957',
+  muted: '#87918E',
+  line: '#E7E1D7',
+  // Durum renkleri
+  danger: '#C8372D',
+  dangerBg: '#FBE7E4',
+  success: '#2E7D4F',
+  successBg: '#E1F1E6',
+  warning: '#A86B00',
+  warningBg: '#FCF1D6',
+  info: '#2F5F9E',
+  infoBg: '#E3ECF7',
+  neutral: '#667270',
+  neutralBg: '#EEF0EE',
 };
 
 /** Web'de odak çerçevesini kaldırır; iOS/Android 'none' değerini desteklemediği için yalnızca web'e uygulanır. */
@@ -32,10 +47,10 @@ export const radius = { sm: 10, md: 14, lg: 20, xl: 28, pill: 999 };
 export const space = (n: number) => n * 4;
 
 export const shadow = Platform.select({
-  web: { boxShadow: '0 6px 18px rgba(194, 65, 12, 0.10)' } as object,
+  web: { boxShadow: '0 6px 20px rgba(30, 42, 41, 0.08)' } as object,
   default: {
-    shadowColor: '#c2410c',
-    shadowOpacity: 0.12,
+    shadowColor: '#1E2A29',
+    shadowOpacity: 0.08,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
     elevation: 4,
@@ -43,10 +58,10 @@ export const shadow = Platform.select({
 });
 
 export const shadowSoft = Platform.select({
-  web: { boxShadow: '0 2px 8px rgba(194, 65, 12, 0.08)' } as object,
+  web: { boxShadow: '0 2px 8px rgba(30, 42, 41, 0.06)' } as object,
   default: {
-    shadowColor: '#c2410c',
-    shadowOpacity: 0.08,
+    shadowColor: '#1E2A29',
+    shadowOpacity: 0.06,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,

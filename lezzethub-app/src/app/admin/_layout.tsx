@@ -20,6 +20,7 @@ export default function AdminLayout() {
   if (!me) return <Redirect href="/" />;
   if (me.role !== 'admin') return <Redirect href="/" />;
   const pending = db.payments.filter((p) => p.status === 'pending').length;
+  const openReports = db.reports.filter((r) => r.status === 'open').length;
 
   return (
     <Tabs
@@ -30,14 +31,15 @@ export default function AdminLayout() {
         tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.line, height: 58 + bottomInset, paddingTop: 6, paddingBottom: bottomInset },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
         tabBarLabelPosition: 'below-icon',
-        tabBarBadgeStyle: { backgroundColor: colors.primary, fontSize: 10 },
+        tabBarBadgeStyle: { backgroundColor: colors.accent, fontSize: 10 },
         sceneStyle: { backgroundColor: colors.cream },
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'İstatistik', tabBarIcon: icon('stats-chart', 'stats-chart-outline') }} />
       <Tabs.Screen name="payments" options={{ title: 'Ödemeler', tabBarIcon: icon('card', 'card-outline'), tabBarBadge: pending || undefined }} />
-      <Tabs.Screen name="users" options={{ title: 'Kullanıcılar', tabBarIcon: icon('people', 'people-outline') }} />
+      <Tabs.Screen name="users" options={{ title: 'Üyeler', tabBarIcon: icon('people', 'people-outline') }} />
       <Tabs.Screen name="listings" options={{ title: 'İlanlar', tabBarIcon: icon('restaurant', 'restaurant-outline') }} />
+      <Tabs.Screen name="reports" options={{ title: 'Şikayetler', tabBarIcon: icon('flag', 'flag-outline'), tabBarBadge: openReports || undefined }} />
     </Tabs>
   );
 }

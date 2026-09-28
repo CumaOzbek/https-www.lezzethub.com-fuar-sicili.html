@@ -5,21 +5,25 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LoginRequired } from '../../components/domain';
+import { ReportSheet } from '../../components/ReportSheet';
 import { useFeedback } from '../../components/feedback';
-import { Avatar, EmptyState, Header, IconButton, StatusBadge } from '../../components/ui';
+import { Avatar, Button, EmptyState, Header, IconButton, Notice, Row, StatusBadge } from '../../components/ui';
 import * as api from '../../lib/api';
 import { chatTime } from '../../lib/format';
-import { useStore } from '../../lib/store';
+import { useBlockedIds, useStore } from '../../lib/store';
 import { colors, noOutline, radius, shadowSoft } from '../../lib/theme';
 
 const QUICK = ['Merhaba 👋', 'Siparişiniz hazır ✅', 'Yola çıktım 🛵', 'Teşekkürler 🙏'];
 
 export default function Chat() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { db, me, mutate } = useStore();
+  const { db, me, actions } = useStore();
   const { run } = useFeedback();
+  const blocked = useBlockedIds();
   const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [reporting, setReporting] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   const order = db.orders.find((o) => o.id === id);
@@ -30,8 +34,8 @@ export default function Chat() {
     : 0;
 
   useEffect(() => {
-    if (me && unreadForMe > 0) mutate((d) => api.markChatRead(d, me.id, id));
-  }, [unreadForMe, me, id, mutate]);
+    if (me && unreadForMe > 0) actions.markChatRead(id).catch(() => {});
+  }, [unreadForMe, me, id, actions]);
 
   if (!me) {
     return (
@@ -51,12 +55,12 @@ export default function Chat() {
   }
 
   const other = db.users.find((u) => u.id === (order.buyerId === me.id ? order.sellerId : order.buyerId));
-  const send = (body: string) => {
-    if (!body.trim()) return;
-    run(() => {
-      mutate((d) => api.sendMessage(d, me.id, order.id, body));
-      setText('');
-    });
+  const send = async (body: string) => {
+    if (!body.trim() || sending) return;
+    setSending(true);
+    const ok = await run(() => actions.sendMessage(order.id, body));
+    setSending(false);
+    if (ok) setText('');
   };
 
   return (
@@ -64,7 +68,12 @@ export default function Chat() {
       <Header
         title={other?.name ?? 'Kullanıcı'}
         subtitle={`${order.listingTitle} · ${order.code}`}
-        right={<IconButton name="receipt-outline" onPress={() => router.push(`/order/${order.id}`)} accessibilityLabel="Sipariş detayı" />}
+        right={
+          <Row gap={8}>
+            {other && <IconButton name="flag-outline" onPress={() => setReporting(true)} accessibilityLabel="Kullanıcıyı şikayet et" />}
+            <IconButton name="receipt-outline" onPress={() => router.push(`/order/${order.id}`)} accessibilityLabel="Sipariş detayı" />
+          </Row>
+        }
       />
       <View style={styles.statusBar}>
         <View style={{ alignSelf: 'center' }}>
@@ -93,8 +102,8 @@ export default function Chat() {
               <View style={[styles.bubble, mine ? styles.mine : styles.theirs]}>
                 <Text style={[styles.msg, mine && { color: '#fff' }]}>{m.text}</Text>
                 <View style={styles.meta}>
-                  <Text style={[styles.time, mine && { color: colors.creamDeep }]}>{chatTime(m.createdAt)}</Text>
-                  {mine && <Ionicons name={m.read ? 'checkmark-done' : 'checkmark'} size={13} color={m.read ? '#fff' : colors.creamDeep} />}
+                  <Text style={[styles.time, mine && { color: colors.onPrimaryMuted }]}>{chatTime(m.createdAt)}</Text>
+                  {mine && <Ionicons name={m.read ? 'checkmark-done' : 'checkmark'} size={13} color={m.read ? '#fff' : colors.onPrimaryMuted} />}
                 </View>
               </View>
             </View>
@@ -102,6 +111,12 @@ export default function Chat() {
         })}
       </ScrollView>
 
+      {other && blocked.has(other.id) ? (
+        <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 10), paddingTop: 12 }]}>
+          <Notice tone="gray" icon="ban-outline" text={`${other.name} adlı kullanıcıyı engelledin; mesaj gönderemezsin.`} />
+          <Button title="Engeli kaldır" variant="ghost" small onPress={() => run(() => actions.unblockUser(other.id), 'Engel kaldırıldı')} style={{ alignSelf: 'center', marginTop: 6 }} />
+        </View>
+      ) : (
       <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 8 }} keyboardShouldPersistTaps="handled">
           {QUICK.map((q) => (
@@ -121,11 +136,15 @@ export default function Chat() {
             onSubmitEditing={() => send(text)}
             blurOnSubmit={false}
           />
-          <Pressable onPress={() => send(text)} style={[styles.send, !text.trim() && { opacity: 0.5 }]} accessibilityLabel="Gönder">
+          <Pressable onPress={() => send(text)} style={[styles.send, (!text.trim() || sending) && { opacity: 0.5 }]} accessibilityLabel="Gönder">
             <Ionicons name="send" size={19} color="#fff" />
           </Pressable>
         </View>
       </View>
+      )}
+      {other && (
+        <ReportSheet visible={reporting} onClose={() => setReporting(false)} targetType="user" targetId={other.id} userId={other.id} userName={other.name} />
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -140,10 +159,10 @@ const styles = StyleSheet.create({
   msg: { fontSize: 15, color: colors.ink, lineHeight: 21 },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-end', marginTop: 3 },
   time: { fontSize: 10.5, color: colors.muted },
-  system: { alignSelf: 'center', backgroundColor: colors.creamDeep, borderRadius: radius.md, paddingVertical: 6, paddingHorizontal: 12, maxWidth: '90%' },
+  system: { alignSelf: 'center', backgroundColor: colors.primarySoft, borderRadius: radius.md, paddingVertical: 6, paddingHorizontal: 12, maxWidth: '90%' },
   systemText: { fontSize: 12.5, color: colors.primaryDark, fontWeight: '700', textAlign: 'center' },
   composer: { backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.line, paddingHorizontal: 12, paddingTop: 8 },
-  quick: { backgroundColor: colors.creamDeep, borderRadius: radius.pill, paddingVertical: 6, paddingHorizontal: 11 },
+  quick: { backgroundColor: colors.primarySoft, borderRadius: radius.pill, paddingVertical: 6, paddingHorizontal: 11 },
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, width: '100%', maxWidth: 680, alignSelf: 'center' },
   input: {
     flex: 1, maxHeight: 110, minHeight: 44, backgroundColor: colors.cream, borderRadius: 22, paddingHorizontal: 16, paddingTop: 11, paddingBottom: 11,

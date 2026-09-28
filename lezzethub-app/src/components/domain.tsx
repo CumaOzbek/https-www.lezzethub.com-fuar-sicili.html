@@ -1,8 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { FlatList, Image, Modal, Platform, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { FlatList, Image, Modal, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BUYER_FEE_RATE, SELLER_FEE_RATE, type Breakdown } from '../lib/commission';
@@ -11,16 +10,19 @@ import { ALL_HATAY, DISTRICTS, suggestNeighborhoods } from '../lib/hatay';
 import { useStore } from '../lib/store';
 import { colors, font, radius, shadowSoft } from '../lib/theme';
 import { CATEGORIES, type DeliveryMethod, type Listing, type Order, type User } from '../lib/types';
-import { useFeedback } from './feedback';
-import { Avatar, Badge, Button, Card, EmptyState, Field, LocationBadge, Row, StatusBadge } from './ui';
+import { Avatar, Badge, Card, EmptyState, Field, LocationBadge, Row, StatusBadge } from './ui';
 
 export const categoryOf = (key: string) => CATEGORIES.find((c) => c.key === key) ?? CATEGORIES[CATEGORIES.length - 1]!;
 
-const PLACEHOLDER_BG = ['#fed7aa', '#fde68a', '#fecaca', '#fbcfe8', '#bbf7d0', '#fdba74'];
+const PLACEHOLDER_BG = ['#F3E6D3', '#E4EEE8', '#F6E4D8', '#E5ECEF', '#F2EAD3', '#EEE5E0'];
 
-export function ListingImage({ listing, height = 170, style }: { listing: Pick<Listing, 'image' | 'category' | 'title'>; height?: number; style?: StyleProp<ViewStyle> }) {
-  if (listing.image) {
-    return <Image source={{ uri: listing.image }} style={[{ width: '100%', height, backgroundColor: colors.creamDeep }, style as object]} resizeMode="cover" />;
+type ImageSource = { images?: string[]; category: Listing['category']; title: string };
+
+/** İlanın kapak fotoğrafı; fotoğraf yoksa kategori simgeli sıcak renkli bir yer tutucu. */
+export function ListingImage({ listing, height = 170, style }: { listing: ImageSource; height?: number; style?: StyleProp<ViewStyle> }) {
+  const cover = listing.images?.[0];
+  if (cover) {
+    return <Image source={{ uri: cover }} style={[{ width: '100%', height, backgroundColor: colors.creamDeep }, style as object]} resizeMode="cover" />;
   }
   const cat = categoryOf(listing.category);
   const bg = PLACEHOLDER_BG[listing.title.length % PLACEHOLDER_BG.length];
@@ -56,10 +58,17 @@ export function ListingCard({ listing, seller, compact }: { listing: Listing; se
             {cat.emoji} {cat.label}
           </Text>
         </View>
-        {listing.status !== 'active' && (
-          <View style={[styles.catPill, { left: undefined, right: 10, backgroundColor: colors.ink }]}>
+        {listing.status !== 'active' ? (
+          <View style={[styles.cornerPill, { backgroundColor: colors.ink }]}>
             <Text style={{ fontSize: 12, fontWeight: '800', color: '#fff' }}>Pasif</Text>
           </View>
+        ) : (
+          listing.images.length > 1 && (
+            <View style={[styles.cornerPill, styles.photoCount]}>
+              <Ionicons name="images-outline" size={12} color="#fff" />
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#fff' }}>{listing.images.length}</Text>
+            </View>
+          )
         )}
       </View>
       <View style={{ padding: 14 }}>
@@ -244,82 +253,6 @@ export function PriceBreakdown({ b, unitPrice, quantity, perspective }: { b: Bre
   );
 }
 
-/* ------------------------------ Görsel seçimi ------------------------------ */
-
-/** Web'de tarayıcı depolaması ~5 MB ile sınırlı olduğundan tek görsel ~1 MB'ı geçmemeli. */
-const MAX_WEB_IMAGE_CHARS = 1_400_000;
-class ImageTooLargeError extends Error {}
-
-async function pick(from: 'camera' | 'library', aspect: [number, number]): Promise<string | undefined> {
-  const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], allowsEditing: true, aspect, quality: 0.6, base64: Platform.OS === 'web' };
-  if (from === 'camera') {
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) return undefined;
-    const r = await ImagePicker.launchCameraAsync(opts);
-    return r.canceled ? undefined : r.assets[0]?.uri;
-  }
-  const r = await ImagePicker.launchImageLibraryAsync(opts);
-  if (r.canceled) return undefined;
-  const a = r.assets[0];
-  if (!a) return undefined;
-  // Web'de blob: adresleri kalıcı değildir; base64 veri adresi saklanır.
-  if (Platform.OS === 'web' && a.base64) {
-    if (a.base64.length > MAX_WEB_IMAGE_CHARS) throw new ImageTooLargeError();
-    return `data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}`;
-  }
-  return a.uri;
-}
-
-export function ImagePickerField({ value, onChange, category, title }: { value?: string; onChange: (uri?: string) => void; category: string; title: string }) {
-  const { toast } = useFeedback();
-  const choose = async (from: 'camera' | 'library') => {
-    try {
-      const uri = await pick(from, [4, 3]);
-      if (uri) onChange(uri);
-      else if (from === 'camera') toast('Kamera izni verilmedi veya çekim iptal edildi.', 'info');
-    } catch (e) {
-      toast(e instanceof ImageTooLargeError ? 'Görsel çok büyük. Lütfen daha küçük bir fotoğraf seçin.' : 'Görsel seçilemedi.', 'error');
-    }
-  };
-  return (
-    <View style={{ marginBottom: 16 }}>
-      <Text style={styles.label}>Görsel</Text>
-      <View style={styles.imageBox}>
-        <ListingImage listing={{ image: value, category: category as Listing['category'], title: title || 'x' }} height={180} />
-        {value && (
-          <Pressable onPress={() => onChange(undefined)} style={styles.removeImg} hitSlop={6}>
-            <Ionicons name="trash-outline" size={16} color="#fff" />
-          </Pressable>
-        )}
-      </View>
-      <Row gap={10} style={{ marginTop: 10 }}>
-        <Button title="Galeriden Seç" icon="images-outline" variant="secondary" small onPress={() => choose('library')} style={{ flex: 1 }} />
-        {Platform.OS !== 'web' && <Button title="Fotoğraf Çek" icon="camera-outline" variant="secondary" small onPress={() => choose('camera')} style={{ flex: 1 }} />}
-      </Row>
-    </View>
-  );
-}
-
-export function AvatarPicker({ user, value, onChange }: { user: User; value?: string; onChange: (uri?: string) => void }) {
-  const { toast } = useFeedback();
-  const choose = async () => {
-    try {
-      const uri = await pick('library', [1, 1]);
-      if (uri) onChange(uri);
-    } catch (e) {
-      toast(e instanceof ImageTooLargeError ? 'Görsel çok büyük. Lütfen daha küçük bir fotoğraf seçin.' : 'Görsel seçilemedi.', 'error');
-    }
-  };
-  return (
-    <Pressable onPress={choose} style={{ alignSelf: 'center', marginBottom: 18 }} accessibilityLabel="Profil fotoğrafını değiştir">
-      <Avatar uri={value} name={user.name} size={96} />
-      <View style={styles.avatarEdit}>
-        <Ionicons name="camera" size={16} color="#fff" />
-      </View>
-    </Pressable>
-  );
-}
-
 /* ------------------------------ Sipariş kartı ------------------------------ */
 
 export function OrderCard({ order, perspective }: { order: Order; perspective: 'buyer' | 'seller' | 'admin' }) {
@@ -375,8 +308,10 @@ export function LoginRequired({ text = 'Bu bölümü kullanmak için giriş yapm
 
 const styles = StyleSheet.create({
   listingCard: { padding: 0, overflow: 'hidden', marginBottom: 14 },
-  pricePill: { position: 'absolute', right: 10, bottom: 10, backgroundColor: colors.primary, borderRadius: radius.pill, paddingVertical: 6, paddingHorizontal: 12, ...shadowSoft },
+  pricePill: { position: 'absolute', right: 10, bottom: 10, backgroundColor: colors.accent, borderRadius: radius.pill, paddingVertical: 6, paddingHorizontal: 12, ...shadowSoft },
   priceText: { color: '#fff', fontWeight: '900', fontSize: 15 },
+  cornerPill: { position: 'absolute', right: 10, top: 10, borderRadius: radius.pill, paddingVertical: 5, paddingHorizontal: 10 },
+  photoCount: { backgroundColor: 'rgba(30,42,41,0.7)', flexDirection: 'row', alignItems: 'center', gap: 4 },
   catPill: { position: 'absolute', left: 10, top: 10, backgroundColor: 'rgba(255,250,245,0.95)', borderRadius: radius.pill, paddingVertical: 5, paddingHorizontal: 10 },
   cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, gap: 8 },
   label: { fontSize: 13, fontWeight: '700', color: colors.inkSoft, marginBottom: 6, marginLeft: 2 },
@@ -389,14 +324,11 @@ const styles = StyleSheet.create({
   sheet: { backgroundColor: colors.cream, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 20, paddingTop: 10, width: '100%', maxWidth: 640, alignSelf: 'center' },
   sheetHandle: { width: 44, height: 5, borderRadius: 3, backgroundColor: colors.peach, alignSelf: 'center', marginBottom: 14 },
   sheetItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 13, paddingHorizontal: 14, borderRadius: radius.md },
-  suggestBox: { backgroundColor: '#fff7ed', borderRadius: radius.md, padding: 10, marginBottom: 14, borderWidth: 1, borderColor: colors.creamDeep },
+  suggestBox: { backgroundColor: colors.primarySoft, borderRadius: radius.md, padding: 10, marginBottom: 14, borderWidth: 1, borderColor: colors.creamDeep },
   suggestChip: { backgroundColor: colors.card, borderRadius: radius.pill, paddingVertical: 6, paddingHorizontal: 11, borderWidth: 1, borderColor: colors.peach },
-  breakdown: { backgroundColor: '#fff7ed', borderRadius: radius.md, padding: 14, borderWidth: 1, borderColor: colors.creamDeep },
+  breakdown: { backgroundColor: colors.cream, borderRadius: radius.md, padding: 14, borderWidth: 1, borderColor: colors.creamDeep },
   bLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5, gap: 10 },
   bDivider: { height: 1, backgroundColor: colors.peach, marginVertical: 6, opacity: 0.7 },
-  imageBox: { borderRadius: radius.lg, overflow: 'hidden', borderWidth: 1.5, borderColor: colors.line, borderStyle: 'dashed' },
-  removeImg: { position: 'absolute', right: 10, top: 10, backgroundColor: 'rgba(0,0,0,0.55)', width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  avatarEdit: { position: 'absolute', right: 0, bottom: 0, width: 32, height: 32, borderRadius: 16, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: colors.cream },
-  orderFooter: { justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#fffbf7', borderTopWidth: 1, borderTopColor: colors.line },
-  unread: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: 7, paddingVertical: 2 },
+  orderFooter: { justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: colors.cream, borderTopWidth: 1, borderTopColor: colors.line },
+  unread: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: colors.accent, borderRadius: radius.pill, paddingHorizontal: 7, paddingVertical: 2 },
 });

@@ -80,7 +80,7 @@ export default function Dashboard() {
           <Avatar uri={me.avatar} name={me.name} size={54} />
           <View style={{ flex: 1 }}>
             <Text style={{ color: '#fff', fontWeight: '900', fontSize: 18 }}>{me.name}</Text>
-            <Text style={{ color: colors.creamDeep, fontSize: 13, marginTop: 2 }}>
+            <Text style={{ color: colors.onPrimaryMuted, fontSize: 13, marginTop: 2 }}>
               📍 {me.neighborhood}, {me.district}
             </Text>
           </View>
@@ -138,7 +138,7 @@ export default function Dashboard() {
 const styles = StyleSheet.create({
   grid: { flexDirection: 'row', gap: 12, marginTop: 12 },
   earnRow: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: 16, padding: 12, marginTop: 14 },
-  earnLabel: { color: colors.creamDeep, fontSize: 12, fontWeight: '700' },
+  earnLabel: { color: colors.onPrimaryMuted, fontSize: 12, fontWeight: '700' },
   earnValue: { color: '#fff', fontSize: 20, fontWeight: '900', marginTop: 2 },
   earnDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.25)', marginHorizontal: 12 },
   menu: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 14 },

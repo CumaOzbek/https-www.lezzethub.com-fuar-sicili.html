@@ -5,14 +5,14 @@ import { Text, View } from 'react-native';
 import { DeliveryIcons, ListingImage, LoginRequired } from '../components/domain';
 import { useFeedback } from '../components/feedback';
 import { Badge, Button, Card, EmptyState, Header, IconButton, Row, Screen, Segmented } from '../components/ui';
-import * as api from '../lib/api';
 import { tl } from '../lib/format';
 import { useStore } from '../lib/store';
-import { font } from '../lib/theme';
+import { shareListing } from '../lib/share';
+import { colors, font } from '../lib/theme';
 
 export default function MyListings() {
-  const { db, me, mutate } = useStore();
-  const { run, confirm } = useFeedback();
+  const { db, me, actions } = useStore();
+  const { run, confirm, toast } = useFeedback();
   const [tab, setTab] = useState<'active' | 'passive'>('active');
 
   if (!me) {
@@ -29,7 +29,7 @@ export default function MyListings() {
 
   const remove = async (id: string, title: string) => {
     const { ok } = await confirm({ title: 'İlanı sil', message: `“${title}” kalıcı olarak silinecek.`, confirmText: 'Sil', destructive: true });
-    if (ok) run(() => mutate((d) => api.deleteListing(d, me, id)), 'İlan silindi');
+    if (ok) run(() => actions.deleteListing(id), 'İlan silindi');
   };
 
   return (
@@ -58,10 +58,11 @@ export default function MyListings() {
                   <Text style={font.h3} numberOfLines={1} onPress={() => router.push(`/listing/${l.id}`)}>
                     {l.title}
                   </Text>
-                  <Text style={{ fontWeight: '900', color: '#ea580c', marginTop: 2 }}>{tl(l.price)}</Text>
+                  <Text style={{ fontWeight: '900', color: colors.accentDark, marginTop: 2 }}>{tl(l.price)}</Text>
                   <Row gap={6} style={{ marginTop: 6, flexWrap: 'wrap' }}>
                     <DeliveryIcons delivery={l.delivery} />
                     <Badge label={`${orders} sipariş`} tone="gray" />
+                    <Badge label={l.images.length ? `${l.images.length} fotoğraf` : 'Fotoğraf yok'} tone={l.images.length ? 'teal' : 'honey'} icon="camera-outline" />
                     {l.removedByAdmin && <Badge label="Admin kaldırdı" tone="red" />}
                   </Row>
                 </View>
@@ -77,12 +78,24 @@ export default function MyListings() {
                   disabled={l.removedByAdmin && l.status !== 'active'}
                   onPress={() =>
                     run(
-                      () => mutate((d) => api.setListingStatus(d, me, l.id, l.status === 'active' ? 'passive' : 'active')),
+                      () => actions.setListingStatus(l.id, l.status === 'active' ? 'passive' : 'active'),
                       l.status === 'active' ? 'İlan pasifleştirildi' : 'İlan yayında',
                     )
                   }
                 />
-                <IconButton name="trash-outline" color="#dc2626" onPress={() => remove(l.id, l.title)} accessibilityLabel="Sil" />
+                {l.status === 'active' && (
+                  <IconButton
+                    name="share-social-outline"
+                    color={colors.primary}
+                    onPress={() =>
+                      run(async () => {
+                        if ((await shareListing(l, me)) === 'copied') toast('İlan bağlantısı panoya kopyalandı', 'success');
+                      })
+                    }
+                    accessibilityLabel="Paylaş"
+                  />
+                )}
+                <IconButton name="trash-outline" color={colors.danger} onPress={() => remove(l.id, l.title)} accessibilityLabel="Sil" />
               </Row>
             </Card>
           );

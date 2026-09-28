@@ -6,13 +6,14 @@ import { useStore, useUnread } from '../lib/store';
 import { colors } from '../lib/theme';
 import { useFeedback } from './feedback';
 import { Logo } from './Logo';
-import { IconButton, Row } from './ui';
+import { IconButton, Row, useLightStatusBar } from './ui';
 
 export function AdminHeader({ title, subtitle }: { title: string; subtitle: string }) {
-  const { logout } = useStore();
+  const { actions } = useStore();
   const unread = useUnread();
   const { confirm } = useFeedback();
   const insets = useSafeAreaInsets();
+  useLightStatusBar();
   return (
     <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
       <View style={styles.headerInner}>
@@ -28,7 +29,7 @@ export function AdminHeader({ title, subtitle }: { title: string; subtitle: stri
               onPress={async () => {
                 const { ok } = await confirm({ title: 'Çıkış yap', message: 'Yönetici oturumu kapatılacak.', confirmText: 'Çıkış Yap' });
                 if (ok) {
-                  logout();
+                  await actions.logout();
                   router.replace('/');
                 }
               }}
@@ -46,5 +47,5 @@ const styles = StyleSheet.create({
   header: { backgroundColor: colors.primary, paddingHorizontal: 16, paddingBottom: 18, borderBottomLeftRadius: 26, borderBottomRightRadius: 26, marginBottom: 6 },
   headerInner: { width: '100%', maxWidth: 640, alignSelf: 'center' },
   title: { color: '#fff', fontSize: 22, fontWeight: '900', marginTop: 14 },
-  subtitle: { color: colors.creamDeep, fontSize: 13, marginTop: 2 },
+  subtitle: { color: colors.onPrimaryMuted, fontSize: 13, marginTop: 2 },
 });

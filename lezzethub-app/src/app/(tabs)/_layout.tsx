@@ -30,7 +30,7 @@ export default function TabsLayout() {
         tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.line, height: 58 + bottomInset, paddingTop: 6, paddingBottom: bottomInset },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
         tabBarLabelPosition: 'below-icon',
-        tabBarBadgeStyle: { backgroundColor: colors.primary, fontSize: 10 },
+        tabBarBadgeStyle: { backgroundColor: colors.accent, fontSize: 10 },
         sceneStyle: { backgroundColor: colors.cream },
       }}
     >
@@ -48,7 +48,7 @@ export default function TabsLayout() {
               <Ionicons name="add" size={28} color="#fff" />
             </View>
           ),
-          tabBarLabelStyle: { fontSize: 11, fontWeight: '800', color: colors.primaryDark },
+          tabBarLabelStyle: { fontSize: 11, fontWeight: '800', color: colors.accentDark },
         }}
         listeners={{
           tabPress: (e) => {
@@ -65,7 +65,7 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   fab: {
-    width: 50, height: 50, borderRadius: 25, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center',
+    width: 50, height: 50, borderRadius: 25, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center',
     marginTop: -22, borderWidth: 4, borderColor: colors.cream, ...shadow,
   },
 });

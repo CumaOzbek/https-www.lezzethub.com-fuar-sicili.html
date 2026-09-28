@@ -6,14 +6,13 @@ import { AdminHeader } from '../../components/AdminHeader';
 import { ListingImage } from '../../components/domain';
 import { useFeedback } from '../../components/feedback';
 import { Badge, Button, Card, Chip, EmptyState, Field, LocationBadge, Row, Screen } from '../../components/ui';
-import * as api from '../../lib/api';
 import { tl } from '../../lib/format';
 import { matchesText } from '../../lib/hatay';
 import { useStore } from '../../lib/store';
 import { colors, font } from '../../lib/theme';
 
 export default function AdminListings() {
-  const { db, me, mutate } = useStore();
+  const { db, me, actions } = useStore();
   const { run, confirm } = useFeedback();
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<'all' | 'active' | 'passive'>('all');
@@ -60,7 +59,7 @@ export default function AdminListings() {
               style={{ flex: 1 }}
               icon={l.status === 'active' ? 'eye-off-outline' : 'eye-outline'}
               title={l.status === 'active' ? 'Yayından Kaldır' : 'Yayına Geri Al'}
-              onPress={() => run(() => mutate((d) => api.setListingStatus(d, me, l.id, l.status === 'active' ? 'passive' : 'active')), l.status === 'active' ? 'İlan yayından kaldırıldı' : 'İlan tekrar yayında')}
+              onPress={() => run(() => actions.setListingStatus(l.id, l.status === 'active' ? 'passive' : 'active'), l.status === 'active' ? 'İlan yayından kaldırıldı' : 'İlan tekrar yayında')}
             />
             <Button
               small
@@ -69,7 +68,7 @@ export default function AdminListings() {
               title="Sil"
               onPress={async () => {
                 const { ok } = await confirm({ title: 'İlanı sil', message: `“${l.title}” kalıcı olarak silinecek.`, confirmText: 'Sil', destructive: true });
-                if (ok) run(() => mutate((d) => api.deleteListing(d, me, l.id)), 'İlan silindi');
+                if (ok) run(() => actions.deleteListing(l.id), 'İlan silindi');
               }}
             />
           </Row>

@@ -3,13 +3,13 @@ import Svg, { Circle, Path } from 'react-native-svg';
 
 import { colors } from '../lib/theme';
 
-/** Yuvarlak rozet içinde ince çizgili, buğulu çorba kasesi. */
-export function LogoMark({ size = 40, inverted = false }: { size?: number; inverted?: boolean }) {
-  const bg = inverted ? colors.cream : colors.primary;
-  const fg = inverted ? colors.primary : colors.cream;
+/** Yuvarlak rozet içinde ince çizgili, buğulu çorba kasesi. Rozet her zaman marka turuncusudur. */
+export function LogoMark({ size = 40, ring = false }: { size?: number; ring?: boolean }) {
+  const bg = colors.accent;
+  const fg = colors.cream;
   return (
     <Svg width={size} height={size} viewBox="0 0 48 48">
-      <Circle cx={24} cy={24} r={23} fill={bg} />
+      <Circle cx={24} cy={24} r={23} fill={bg} stroke={ring ? colors.cream : 'none'} strokeWidth={ring ? 1.5 : 0} />
       <Circle cx={24} cy={24} r={20} fill="none" stroke={fg} strokeOpacity={0.35} strokeWidth={0.8} />
       {/* buğu */}
       <Path d="M18 12c-1.6 1.8 1.6 3.2 0 5" stroke={fg} strokeWidth={1.6} strokeLinecap="round" fill="none" />
@@ -24,12 +24,13 @@ export function LogoMark({ size = 40, inverted = false }: { size?: number; inver
   );
 }
 
+/** `inverted`: koyu (ana renk) zemin üzerinde açık renkli yazı. */
 export function Logo({ size = 40, inverted = false, tagline = false }: { size?: number; inverted?: boolean; tagline?: boolean }) {
   const text = inverted ? colors.cream : colors.ink;
-  const accent = inverted ? colors.creamDeep : colors.primary;
+  const accent = inverted ? '#F6C9A6' : colors.accent;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: size * 0.25 }}>
-      <LogoMark size={size} inverted={inverted} />
+      <LogoMark size={size} ring={inverted} />
       <View>
         <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
           <Text style={{ fontSize: size * 0.55, fontWeight: '900', color: text, letterSpacing: -0.5 }}>Lezzet</Text>
@@ -38,7 +39,7 @@ export function Logo({ size = 40, inverted = false, tagline = false }: { size?: 
           </Text>
         </View>
         {tagline && (
-          <Text style={{ fontSize: size * 0.24, color: inverted ? colors.creamDeep : colors.muted, marginTop: 1 }}>
+          <Text style={{ fontSize: size * 0.24, color: inverted ? 'rgba(250,247,242,0.8)' : colors.muted, marginTop: 1 }}>
             Hatay’ın ev lezzetleri, mahallenden
           </Text>
         )}

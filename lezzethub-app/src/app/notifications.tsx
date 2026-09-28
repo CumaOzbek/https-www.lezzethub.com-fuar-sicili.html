@@ -11,7 +11,7 @@ import { useStore } from '../lib/store';
 import { colors, font, radius, shadowSoft } from '../lib/theme';
 
 export default function Notifications() {
-  const { db, me, mutate } = useStore();
+  const { db, me, actions } = useStore();
   const list = me ? db.notifications.filter((n) => n.userId === me.id) : [];
   // Ekran açıldığındaki okunmamışları vurgulamak için ilk halini sakla.
   const [unreadAtOpen] = useState(() => new Set(list.filter((n) => !n.read).map((n) => n.id)));
@@ -19,9 +19,9 @@ export default function Notifications() {
 
   useEffect(() => {
     if (me && hasUnread) {
-      mutate((d) => d.notifications.forEach((n) => n.userId === me.id && (n.read = true)));
+      actions.markNotificationsRead().catch(() => {});
     }
-  }, [me, hasUnread, mutate]);
+  }, [me, hasUnread, actions]);
 
   if (!me) {
     return (
@@ -61,7 +61,7 @@ export default function Notifications() {
 
 const styles = StyleSheet.create({
   item: { flexDirection: 'row', gap: 12, backgroundColor: colors.card, borderRadius: radius.lg, padding: 14, marginBottom: 10, ...shadowSoft },
-  unread: { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: colors.peach },
+  unread: { backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primaryLight },
   icon: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.creamDeep, alignItems: 'center', justifyContent: 'center' },
   dot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary, marginTop: 6 },
 });

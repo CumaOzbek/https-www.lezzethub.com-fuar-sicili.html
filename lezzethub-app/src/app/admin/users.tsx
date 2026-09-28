@@ -5,13 +5,12 @@ import { Text, View } from 'react-native';
 import { AdminHeader } from '../../components/AdminHeader';
 import { useFeedback } from '../../components/feedback';
 import { Avatar, Badge, Button, Card, EmptyState, Field, LocationBadge, Row, Screen } from '../../components/ui';
-import * as api from '../../lib/api';
 import { matchesText } from '../../lib/hatay';
 import { useStore } from '../../lib/store';
 import { font } from '../../lib/theme';
 
 export default function AdminUsers() {
-  const { db, me, mutate } = useStore();
+  const { db, me, actions } = useStore();
   const { run, confirm } = useFeedback();
   const [q, setQ] = useState('');
   if (!me) return null;
@@ -52,7 +51,7 @@ export default function AdminUsers() {
                   style={{ flex: 1 }}
                   icon={u.active ? 'pause-outline' : 'play-outline'}
                   title={u.active ? 'Pasifleştir' : 'Aktifleştir'}
-                  onPress={() => run(() => mutate((d) => api.setUserActive(d, me, u.id, !u.active)), u.active ? 'Kullanıcı pasifleştirildi' : 'Kullanıcı aktifleştirildi')}
+                  onPress={() => run(() => actions.adminSetUserActive(u.id, !u.active), u.active ? 'Kullanıcı pasifleştirildi' : 'Kullanıcı aktifleştirildi')}
                 />
                 <Button
                   small
@@ -62,7 +61,7 @@ export default function AdminUsers() {
                   title={u.role === 'admin' ? 'Admin Al' : 'Admin Yap'}
                   onPress={async () => {
                     const { ok } = await confirm({ title: u.role === 'admin' ? 'Admin yetkisini al' : 'Admin yap', message: `${u.name} için yetki değiştirilecek.`, confirmText: 'Onayla' });
-                    if (ok) run(() => mutate((d) => api.setUserRole(d, me, u.id, u.role === 'admin' ? 'user' : 'admin')), 'Yetki güncellendi');
+                    if (ok) run(() => actions.adminSetUserRole(u.id, u.role === 'admin' ? 'user' : 'admin'), 'Yetki güncellendi');
                   }}
                 />
                 <Button
@@ -72,7 +71,7 @@ export default function AdminUsers() {
                   title="Sil"
                   onPress={async () => {
                     const { ok } = await confirm({ title: 'Kullanıcıyı sil', message: `${u.name} ve tüm ilanları kalıcı olarak silinecek.`, confirmText: 'Sil', destructive: true });
-                    if (ok) run(() => mutate((d) => api.deleteUser(d, me, u.id)), 'Kullanıcı silindi');
+                    if (ok) run(() => actions.adminDeleteUser(u.id), 'Kullanıcı silindi');
                   }}
                 />
               </Row>

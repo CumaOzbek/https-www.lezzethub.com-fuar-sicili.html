@@ -3,7 +3,7 @@ import { createOrder, orderAction, saveListing, sendMessage } from './api';
 import type { ListingInput } from './api';
 import type { DB, User } from './types';
 
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 export const DEMO_ACCOUNTS = [
   { label: 'Admin', email: 'admin@lezzethub.com', password: 'admin123', hint: 'Yönetici paneli' },
@@ -46,7 +46,7 @@ const USERS: SeedUser[] = [
   },
 ];
 
-type SeedListing = ListingInput & { owner: string };
+type SeedListing = Omit<ListingInput, 'images'> & { owner: string };
 
 const LISTINGS: SeedListing[] = [
   {
@@ -102,13 +102,13 @@ const LISTINGS: SeedListing[] = [
 ];
 
 export async function createSeed(hash: (password: string) => Promise<string>): Promise<DB> {
-  const db: DB = { version: DB_VERSION, users: [], listings: [], orders: [], messages: [], payments: [], notifications: [] };
+  const db: DB = { version: DB_VERSION, users: [], listings: [], orders: [], messages: [], payments: [], notifications: [], reports: [], blocks: [] };
   const created = new Date(Date.now() - 1000 * 60 * 60 * 24 * 20).toISOString();
   for (const { password, ...u } of USERS) {
-    db.users.push({ ...u, passwordHash: await hash(password), active: true, createdAt: created });
+    db.users.push({ ...u, passwordHash: await hash(password), active: true, acceptedTermsAt: created, createdAt: created });
   }
   const ids: string[] = [];
-  for (const { owner, ...l } of LISTINGS) ids.push(saveListing(db, owner, l).id);
+  for (const { owner, ...l } of LISTINGS) ids.push(saveListing(db, owner, { ...l, images: [] }).id);
 
   const admin = db.users.find((u) => u.id === 'u-admin')!;
   const ayse = db.users.find((u) => u.id === 'u-ayse')!;

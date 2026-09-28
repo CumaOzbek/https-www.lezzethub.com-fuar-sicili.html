@@ -38,6 +38,17 @@ export default function AdminStats() {
         <StatCard label="Bekleyen ödeme" value={s.pendingPayments} icon="hourglass-outline" tone="yellow" onPress={() => router.navigate('/admin/payments')} />
         <StatCard label={`Sipariş · ${s.completedOrders} tamamlandı`} value={s.orders} icon="receipt-outline" tone="green" />
       </View>
+      {s.openReports > 0 && (
+        <Card style={{ marginTop: 12, backgroundColor: colors.dangerBg }} onPress={() => router.navigate('/admin/reports')}>
+          <Row gap={10}>
+            <Text style={{ fontSize: 22 }}>🚩</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[font.h3, { color: colors.danger }]}>{s.openReports} açık şikayet</Text>
+              <Text style={font.small}>Şikayetleri 24 saat içinde incelemen önerilir.</Text>
+            </View>
+          </Row>
+        </Card>
+      )}
 
       <Card style={{ marginTop: 12, backgroundColor: colors.ink }}>
         <Text style={{ color: colors.peach, fontWeight: '700', fontSize: 13 }}>Toplam komisyon geliri</Text>

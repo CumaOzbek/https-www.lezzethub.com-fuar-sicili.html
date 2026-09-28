@@ -2,19 +2,19 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Text, View } from 'react-native';
 
-import { ImagePickerField, LoginRequired } from '../components/domain';
+import { LoginRequired } from '../components/domain';
 import { useFeedback } from '../components/feedback';
+import { PhotoManager } from '../components/photos';
 import { Button, Card, Chip, Field, Header, LocationBadge, Notice, Row, Screen, StickyFooter, Toggle } from '../components/ui';
-import * as api from '../lib/api';
 import { calcBreakdown } from '../lib/commission';
 import { tl } from '../lib/format';
 import { useStore } from '../lib/store';
-import { font } from '../lib/theme';
+import { colors, font } from '../lib/theme';
 import { CATEGORIES, type CategoryKey, type DeliveryMethod } from '../lib/types';
 
 export default function ListingForm() {
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { db, me, mutate } = useStore();
+  const { db, me, actions } = useStore();
   const { run, confirm } = useFeedback();
   const existing = id ? db.listings.find((l) => l.id === id) : undefined;
 
@@ -22,10 +22,11 @@ export default function ListingForm() {
   const [description, setDescription] = useState(existing?.description ?? '');
   const [price, setPrice] = useState(existing ? String(existing.price) : '');
   const [category, setCategory] = useState<CategoryKey>(existing?.category ?? 'ana-yemek');
-  const [image, setImage] = useState<string | undefined>(existing?.image);
+  const [images, setImages] = useState<string[]>(existing?.images ?? []);
   const [prepTime, setPrepTime] = useState(existing?.prepTime ?? '');
   const [delivery, setDelivery] = useState<DeliveryMethod[]>(existing?.delivery ?? ['pickup']);
   const [active, setActive] = useState(existing ? existing.status === 'active' : true);
+  const [saving, setSaving] = useState(false);
 
   if (!me) {
     return (
@@ -42,24 +43,23 @@ export default function ListingForm() {
   const priceNum = Number(price.replace(',', '.'));
   const preview = Number.isFinite(priceNum) && priceNum > 0 ? calcBreakdown(priceNum, 1) : null;
 
-  const save = () =>
-    run(() => {
-      const l = mutate((d) =>
-        api.saveListing(
-          d,
-          me.id,
-          { title, description, price: priceNum, category, image, prepTime, delivery, status: active ? 'active' : 'passive' },
-          existing?.id,
-        ),
+  const save = async () => {
+    setSaving(true);
+    await run(async () => {
+      const l = await actions.saveListing(
+        { title, description, price: priceNum, category, images, prepTime, delivery, status: active ? 'active' : 'passive' },
+        existing?.id,
       );
       router.replace(`/listing/${l.id}`);
     }, existing ? 'İlan güncellendi' : 'İlanın yayında! 🎉');
+    setSaving(false);
+  };
 
   const remove = async () => {
     if (!existing) return;
     const { ok } = await confirm({ title: 'İlanı sil', message: `“${existing.title}” kalıcı olarak silinecek.`, confirmText: 'Sil', destructive: true });
     if (ok) {
-      const done = await run(() => mutate((d) => api.deleteListing(d, me, existing.id)), 'İlan silindi');
+      const done = await run(() => actions.deleteListing(existing.id), 'İlan silindi');
       if (done) router.replace('/my-listings');
     }
   };
@@ -67,18 +67,26 @@ export default function ListingForm() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
       <Screen
-        header={<Header title={existing ? 'İlanı Düzenle' : 'Yeni İlan'} subtitle="Ev yapımı lezzetini paylaş" />}
+        header={<Header title={existing ? 'İlanı Düzenle' : 'Yeni İlan'} subtitle="Ev yapımı lezzetini tanıt" />}
         footer={
           <StickyFooter>
-            <Button title={existing ? 'Değişiklikleri Kaydet' : 'İlanı Yayınla'} icon="checkmark-circle-outline" onPress={save} />
+            <Button title={existing ? 'Değişiklikleri Kaydet' : 'İlanı Yayınla'} icon="checkmark-circle-outline" onPress={save} loading={saving} />
           </StickyFooter>
         }
       >
-        <ImagePickerField value={image} onChange={setImage} category={category} title={title} />
+        <PhotoManager value={images} onChange={setImages} category={category} title={title} />
 
         <Card>
           <Field label="Başlık" value={title} onChangeText={setTitle} placeholder="Ör. Antakya Künefesi (Tepsi)" maxLength={60} />
-          <Field label="Açıklama" value={description} onChangeText={setDescription} placeholder="Malzemeler, porsiyon, lezzet notları…" multiline maxLength={500} />
+          <Field
+            label="Açıklama"
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Malzemeler, porsiyon, alerjenler, lezzet notları…"
+            multiline
+            maxLength={500}
+            hint={`${description.length}/500 · Alerjenleri (fındık, süt, gluten vb.) belirtmeyi unutma.`}
+          />
           <Field
             label="Fiyat (TL)"
             icon="pricetag-outline"
@@ -88,13 +96,13 @@ export default function ListingForm() {
             keyboardType="decimal-pad"
             hint={preview ? `Alıcı ${tl(preview.buyerTotal)} öder · Sana ${tl(preview.sellerNet)} kalır (porsiyon başı)` : 'Porsiyon / adet başı fiyat'}
           />
-          <Text style={[font.small, { fontWeight: '700', color: '#5b4636', marginBottom: 8 }]}>Kategori</Text>
+          <Text style={[font.small, { fontWeight: '700', color: colors.inkSoft, marginBottom: 8 }]}>Kategori</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
             {CATEGORIES.map((c) => (
               <Chip key={c.key} label={c.label} emoji={c.emoji} active={category === c.key} onPress={() => setCategory(c.key)} />
             ))}
           </View>
-          <Field label="Müsaitlik / hazırlanma süresi" icon="time-outline" value={prepTime} onChangeText={setPrepTime} placeholder="Ör. 1 gün önceden sipariş, 2 saatte hazır" />
+          <Field label="Müsaitlik / hazırlanma süresi" icon="time-outline" value={prepTime} onChangeText={setPrepTime} placeholder="Ör. 1 gün önceden sipariş, 2 saatte hazır" maxLength={120} />
         </Card>
 
         <Text style={[font.h3, { marginTop: 20, marginBottom: 10 }]}>Teslimat seçenekleri</Text>

@@ -3,16 +3,20 @@ export type Role = 'user' | 'admin';
 export interface User {
   id: string;
   name: string;
+  /** Yalnızca kullanıcının kendisine ve adminlere görünür (canlı modda diğerleri için boştur). */
   email: string;
-  passwordHash: string;
+  /** Yalnızca cihaz içi (demo) modda kullanılır. */
+  passwordHash?: string;
   role: Role;
   active: boolean;
   bio: string;
   avatar?: string;
   district: string;
   neighborhood: string;
+  /** Açık adres: yalnızca kullanıcının kendisine ve adminlere görünür. */
   address: string;
   availability: string;
+  acceptedTermsAt?: string;
   createdAt: string;
 }
 
@@ -39,7 +43,8 @@ export interface Listing {
   description: string;
   price: number;
   category: CategoryKey;
-  image?: string;
+  /** İlk fotoğraf kapak fotoğrafıdır. En fazla MAX_LISTING_PHOTOS adet. */
+  images: string[];
   prepTime: string;
   delivery: DeliveryMethod[];
   status: ListingStatus;
@@ -71,7 +76,10 @@ export interface Order {
   quantity: number;
   appointment: string;
   delivery: DeliveryMethod;
+  /** Kurye teslimatında alıcının adresi. */
   address: string;
+  /** Elden teslimde satıcının adresi; satıcı onayladığında doldurulur. */
+  pickupAddress?: string;
   note: string;
   subtotal: number;
   buyerFee: number;
@@ -118,6 +126,35 @@ export interface AppNotification {
   read: boolean;
 }
 
+export const MAX_LISTING_PHOTOS = 6;
+
+export const REPORT_REASONS = [
+  { key: 'misleading', label: 'Yanıltıcı ilan veya fotoğraf' },
+  { key: 'hygiene', label: 'Hijyen / gıda güvenliği endişesi' },
+  { key: 'abuse', label: 'Hakaret, taciz veya uygunsuz içerik' },
+  { key: 'fraud', label: 'Dolandırıcılık şüphesi' },
+  { key: 'other', label: 'Diğer' },
+] as const;
+
+export type ReportReason = (typeof REPORT_REASONS)[number]['key'];
+
+export interface Report {
+  id: string;
+  reporterId: string;
+  targetType: 'listing' | 'user';
+  targetId: string;
+  reason: ReportReason;
+  note: string;
+  status: 'open' | 'resolved';
+  createdAt: string;
+}
+
+export interface Block {
+  blockerId: string;
+  blockedId: string;
+  createdAt: string;
+}
+
 export interface DB {
   version: number;
   users: User[];
@@ -126,4 +163,6 @@ export interface DB {
   messages: Message[];
   payments: Payment[];
   notifications: AppNotification[];
+  reports: Report[];
+  blocks: Block[];
 }

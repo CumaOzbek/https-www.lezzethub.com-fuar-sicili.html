@@ -6,14 +6,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ListingCard, NeighborhoodInput } from '../../components/domain';
 import { Logo } from '../../components/Logo';
-import { Button, Chip, EmptyState, Field, IconButton, Row } from '../../components/ui';
+import { Button, Chip, EmptyState, Field, IconButton, Row, useLightStatusBar } from '../../components/ui';
 import { ALL_HATAY, DISTRICTS, matchesText } from '../../lib/hatay';
-import { useStore, useUnread } from '../../lib/store';
+import { useBlockedIds, useStore, useUnread } from '../../lib/store';
 import { colors, font, radius, shadow } from '../../lib/theme';
 import { CATEGORIES } from '../../lib/types';
 
 export default function Discover() {
   const { db, me } = useStore();
+  const blocked = useBlockedIds();
+  useLightStatusBar();
   const unread = useUnread();
   const insets = useSafeAreaInsets();
 
@@ -43,7 +45,7 @@ export default function Discover() {
   const results = useMemo(() => {
     const list = db.listings.filter((l) => {
       const owner = users.get(l.ownerId);
-      if (l.status !== 'active' || !owner?.active) return false;
+      if (l.status !== 'active' || !owner?.active || blocked.has(l.ownerId)) return false;
       if (district !== ALL_HATAY && l.district !== district) return false;
       if (neighborhood.trim() && !matchesText(l.neighborhood, neighborhood)) return false;
       if (category && l.category !== category) return false;
@@ -52,7 +54,7 @@ export default function Discover() {
     });
     // Kullanıcının kendi ilanları akışın sonunda yer alır.
     return me ? [...list.filter((l) => l.ownerId !== me.id), ...list.filter((l) => l.ownerId === me.id)] : list;
-  }, [db.listings, users, district, neighborhood, category, query, me]);
+  }, [db.listings, users, district, neighborhood, category, query, me, blocked]);
 
   const activeFilterCount = (neighborhood.trim() ? 1 : 0) + (category ? 1 : 0);
 
@@ -179,7 +181,7 @@ export default function Discover() {
               <Text style={{ fontWeight: '800', color: colors.ink, fontSize: 15 }}>Mutfağın gelire dönüşsün</Text>
               <Text style={[font.small, { marginTop: 2 }]}>Ücretsiz kayıt ol, ev yemeklerini mahallene sat.</Text>
             </View>
-            <Button title="Kayıt Ol" small onPress={() => router.push('/register')} />
+            <Button title="Kayıt Ol" variant="accent" small onPress={() => router.push('/register')} />
           </View>
         )}
 
@@ -222,7 +224,7 @@ const styles = StyleSheet.create({
   hero: { backgroundColor: colors.primary, paddingHorizontal: 16, paddingBottom: 20, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
   heroInner: { width: '100%', maxWidth: 640, alignSelf: 'center' },
   greet: { color: '#fff', fontSize: 24, fontWeight: '900', marginTop: 18 },
-  greetSub: { color: colors.creamDeep, fontSize: 14, marginTop: 4 },
+  greetSub: { color: colors.onPrimaryMuted, fontSize: 14, marginTop: 4 },
   searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16 },
   filterBtn: { width: 50, height: 50, borderRadius: radius.md, backgroundColor: colors.primaryDark, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
   filterDot: { position: 'absolute', top: 6, right: 6, width: 16, height: 16, borderRadius: 8, backgroundColor: colors.cream, alignItems: 'center', justifyContent: 'center' },
@@ -232,7 +234,7 @@ const styles = StyleSheet.create({
   chips: { gap: 8, paddingRight: 16 },
   filterPanel: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 14, marginTop: 12, ...shadow },
   catTile: { width: 76, paddingVertical: 10, alignItems: 'center', borderRadius: radius.md, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.line, marginTop: 12 },
-  catTileActive: { borderColor: colors.primary, backgroundColor: '#fff7ed' },
+  catTileActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   catText: { fontSize: 11, fontWeight: '700', color: colors.inkSoft, marginTop: 4 },
-  promo: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.creamDeep, borderRadius: radius.lg, padding: 14, marginTop: 16 },
+  promo: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.accentSoft, borderRadius: radius.lg, padding: 14, marginTop: 16 },
 });

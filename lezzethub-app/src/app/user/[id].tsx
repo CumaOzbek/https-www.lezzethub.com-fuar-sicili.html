@@ -1,14 +1,20 @@
 import { Redirect, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { ListingCard } from '../../components/domain';
-import { Avatar, Card, EmptyState, Header, InfoRow, LocationBadge, Screen, SectionTitle } from '../../components/ui';
-import { useStore } from '../../lib/store';
+import { useFeedback } from '../../components/feedback';
+import { ReportSheet } from '../../components/ReportSheet';
+import { Avatar, Button, Card, EmptyState, Header, IconButton, InfoRow, LocationBadge, Notice, Screen, SectionTitle } from '../../components/ui';
+import { useBlockedIds, useStore } from '../../lib/store';
 import { colors, font } from '../../lib/theme';
 
 export default function UserProfile() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { db, me } = useStore();
+  const { db, me, actions } = useStore();
+  const { run } = useFeedback();
+  const blocked = useBlockedIds();
+  const [reporting, setReporting] = useState(false);
   const user = db.users.find((u) => u.id === id);
 
   if (!user || (!user.active && me?.role !== 'admin')) {
@@ -25,7 +31,15 @@ export default function UserProfile() {
   const completed = db.orders.filter((o) => o.sellerId === user.id && o.status === 'completed').length;
 
   return (
-    <Screen header={<Header title={user.name} subtitle="Satıcı profili" />}>
+    <Screen
+      header={
+        <Header
+          title={user.name}
+          subtitle="Satıcı profili"
+          right={me && me.role !== 'admin' ? <IconButton name="flag-outline" onPress={() => setReporting(true)} accessibilityLabel="Kullanıcıyı şikayet et" /> : undefined}
+        />
+      }
+    >
       <Card style={{ alignItems: 'center', paddingVertical: 22 }}>
         <Avatar uri={user.avatar} name={user.name} size={92} />
         <Text style={[font.h2, { marginTop: 12 }]}>{user.name}</Text>
@@ -49,8 +63,18 @@ export default function UserProfile() {
           <InfoRow icon="time-outline" label="Genel müsaitlik" value={user.availability} />
         </Card>
       )}
-      <SectionTitle title="Yayındaki ilanları" />
-      {listings.length === 0 ? <EmptyState emoji="🍽️" title="Yayında ilan yok" /> : listings.map((l) => <ListingCard key={l.id} listing={l} />)}
+      {blocked.has(user.id) ? (
+        <View style={{ marginTop: 14 }}>
+          <Notice tone="gray" icon="ban-outline" title="Bu kullanıcıyı engelledin" text="İlanlarını görmezsin ve mesajlaşamazsınız." />
+          <Button title="Engeli kaldır" variant="ghost" small onPress={() => run(() => actions.unblockUser(user.id), 'Engel kaldırıldı')} style={{ alignSelf: 'center', marginTop: 6 }} />
+        </View>
+      ) : (
+        <>
+          <SectionTitle title="Yayındaki ilanları" />
+          {listings.length === 0 ? <EmptyState emoji="🍽️" title="Yayında ilan yok" /> : listings.map((l) => <ListingCard key={l.id} listing={l} />)}
+        </>
+      )}
+      {me && <ReportSheet visible={reporting} onClose={() => setReporting(false)} targetType="user" targetId={user.id} userId={user.id} userName={user.name} />}
     </Screen>
   );
 }

@@ -15,7 +15,7 @@ const STEP_LABELS = ['Satıcı onayı', 'Onaylandı', 'Ödeme onayı', 'Ödendi'
 
 export default function OrderDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { db, me, mutate } = useStore();
+  const { db, me, actions: backend } = useStore();
   const { run, confirm } = useFeedback();
   const order = db.orders.find((o) => o.id === id);
 
@@ -52,9 +52,9 @@ export default function OrderDetail() {
   const b = calcBreakdown(order.unitPrice, order.quantity);
   const confirmedStage = ['approved', 'payment_pending', 'paid', 'completed'].includes(order.status);
 
-  const act = async (action: Parameters<typeof api.orderAction>[3], opts: { title: string; message: string; confirmText: string; destructive?: boolean; note?: string; success: string }) => {
+  const act = async (action: api.OrderAction, opts: { title: string; message: string; confirmText: string; destructive?: boolean; note?: string; success: string }) => {
     const r = await confirm({ title: opts.title, message: opts.message, confirmText: opts.confirmText, destructive: opts.destructive, inputPlaceholder: opts.note });
-    if (r.ok) await run(() => mutate((d) => api.orderAction(d, me, order.id, action, r.note || undefined)), opts.success);
+    if (r.ok) await run(() => backend.orderAction(order.id, action, r.note || undefined), opts.success);
   };
 
   const userName = (uid: string) => (uid === me.id ? 'Sen' : db.users.find((u) => u.id === uid)?.name ?? 'Sistem');
@@ -173,7 +173,11 @@ export default function OrderDetail() {
           <InfoRow
             icon="location-outline"
             label="Teslim alma adresi (satıcı)"
-            value={confirmedStage || !isBuyer ? seller?.address || `${seller?.neighborhood}, ${seller?.district}` : `${seller?.neighborhood}, ${seller?.district} · açık adres onaydan sonra görünür`}
+            value={
+              isBuyer && !confirmedStage
+                ? `${seller?.neighborhood ?? ''}, ${seller?.district ?? ''} · açık adres satıcı onayından sonra görünür`
+                : order.pickupAddress || (isSeller ? seller?.address : '') || `${seller?.neighborhood ?? ''}, ${seller?.district ?? ''}`
+            }
           />
         )}
         {!!order.note && <InfoRow icon="document-text-outline" label="Not" value={order.note} />}

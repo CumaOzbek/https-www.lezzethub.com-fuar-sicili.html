@@ -6,7 +6,6 @@ import { AdminHeader } from '../../components/AdminHeader';
 import { PriceBreakdown } from '../../components/domain';
 import { useFeedback } from '../../components/feedback';
 import { Badge, Button, Card, EmptyState, Row, Screen, Segmented } from '../../components/ui';
-import * as api from '../../lib/api';
 import { calcBreakdown } from '../../lib/commission';
 import { DELIVERY_LABEL, appointmentText, timeAgo, tl } from '../../lib/format';
 import { useStore } from '../../lib/store';
@@ -20,7 +19,7 @@ const TONE: Record<PaymentStatus, { label: string; tone: 'yellow' | 'green' | 'r
 };
 
 export default function AdminPayments() {
-  const { db, me, mutate } = useStore();
+  const { db, me, actions } = useStore();
   const { run, confirm } = useFeedback();
   const [tab, setTab] = useState<'pending' | 'history'>('pending');
   if (!me) return null;
@@ -37,7 +36,7 @@ export default function AdminPayments() {
       inputPlaceholder: approve ? undefined : 'Red gerekçesi (isteğe bağlı)',
     });
     if (r.ok) {
-      await run(() => mutate((d) => api.orderAction(d, me, orderId, approve ? 'paymentApprove' : 'paymentReject', r.note || undefined)), approve ? 'Ödeme onaylandı ✅' : 'Ödeme reddedildi');
+      await run(() => actions.orderAction(orderId, approve ? 'paymentApprove' : 'paymentReject', r.note || undefined), approve ? 'Ödeme onaylandı ✅' : 'Ödeme reddedildi');
     }
   };
 

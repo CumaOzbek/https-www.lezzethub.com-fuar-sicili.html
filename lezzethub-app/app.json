@@ -8,25 +8,31 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.lezzethub.app"
+      "bundleIdentifier": "com.lezzethub.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#fffaf5",
+        "backgroundColor": "#FAF7F2",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.lezzethub.app"
+      "package": "com.lezzethub.app",
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro",
       "output": "single",
       "name": "LezzetHub",
-      "themeColor": "#ea580c",
-      "backgroundColor": "#fffaf5"
+      "themeColor": "#1F5E57",
+      "backgroundColor": "#FAF7F2"
     },
     "plugins": [
       "expo-router",
@@ -35,7 +41,8 @@
         "expo-image-picker",
         {
           "photosPermission": "İlan ve profil fotoğrafı seçmek için galerinize erişim gerekiyor.",
-          "cameraPermission": "İlan ve profil fotoğrafı çekmek için kameranıza erişim gerekiyor."
+          "cameraPermission": "İlan ve profil fotoğrafı çekmek için kameranıza erişim gerekiyor.",
+          "microphonePermission": false
         }
       ],
       [
@@ -44,14 +51,16 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 180,
           "resizeMode": "contain",
-          "backgroundColor": "#fffaf5"
+          "backgroundColor": "#FAF7F2"
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "scheme": "lezzethub",
-    "primaryColor": "#ea580c",
+    "primaryColor": "#1F5E57",
     "experiments": {
       "typedRoutes": false
-    }
+    },
+    "description": "Hatay’ın ev yemekleri pazaryeri: ilçe ve mahalle bazında randevulu sipariş."
   }
 }

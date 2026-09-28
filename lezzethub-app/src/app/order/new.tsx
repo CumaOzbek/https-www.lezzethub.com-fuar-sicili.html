@@ -35,7 +35,7 @@ function buildSlots(day: Date) {
 
 export default function NewOrder() {
   const { listingId } = useLocalSearchParams<{ listingId: string }>();
-  const { db, me, mutate } = useStore();
+  const { db, me, actions } = useStore();
   const { run } = useFeedback();
   const listing = db.listings.find((l) => l.id === listingId);
   const seller = listing && db.users.find((u) => u.id === listing.ownerId);
@@ -72,9 +72,9 @@ export default function NewOrder() {
 
   const submit = async () => {
     setLoading(true);
-    await run(() => {
+    await run(async () => {
       if (!slot) throw new api.ApiError('Lütfen randevu saati seçin.');
-      const order = mutate((d) => api.createOrder(d, me.id, { listingId: listing.id, quantity, appointment: slot, delivery, address, note }));
+      const order = await actions.createOrder({ listingId: listing.id, quantity, appointment: slot, delivery, address, note });
       router.replace(`/order/${order.id}`);
     }, 'Siparişin satıcıya iletildi! 🛎');
     setLoading(false);
@@ -105,7 +105,7 @@ export default function NewOrder() {
               <Text style={font.h3} numberOfLines={1}>
                 {listing.title}
               </Text>
-              <Text style={{ color: colors.primary, fontWeight: '900', marginTop: 2 }}>{tl(listing.price)} / adet</Text>
+              <Text style={{ color: colors.accentDark, fontWeight: '900', marginTop: 2 }}>{tl(listing.price)} / adet</Text>
               <LocationBadge district={listing.district} neighborhood={listing.neighborhood} compact />
             </View>
           </Row>
@@ -149,9 +149,9 @@ export default function NewOrder() {
                 }}
                 style={[styles.day, active && styles.dayActive, disabled && { opacity: 0.4 }]}
               >
-                <Text style={[styles.dayTop, active && { color: colors.creamDeep }]}>{dayLabel(d, true)}</Text>
+                <Text style={[styles.dayTop, active && { color: colors.onPrimaryMuted }]}>{dayLabel(d, true)}</Text>
                 <Text style={[styles.dayNum, active && { color: '#fff' }]}>{d.getDate()}</Text>
-                <Text style={[styles.dayTop, active && { color: colors.creamDeep }]}>{dateShort(d).split(' ')[1]}</Text>
+                <Text style={[styles.dayTop, active && { color: colors.onPrimaryMuted }]}>{dateShort(d).split(' ')[1]}</Text>
               </Pressable>
             );
           })}
@@ -204,7 +204,7 @@ export default function NewOrder() {
 
 const styles = StyleSheet.create({
   section: { fontSize: 13, fontWeight: '800', color: colors.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 20, marginBottom: 10 },
-  stepBtn: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.creamDeep, alignItems: 'center', justifyContent: 'center' },
+  stepBtn: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   day: { width: 62, paddingVertical: 10, borderRadius: radius.md, backgroundColor: colors.card, alignItems: 'center', borderWidth: 1.5, borderColor: colors.line },
   dayActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   dayTop: { fontSize: 11, fontWeight: '700', color: colors.muted },

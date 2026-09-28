@@ -48,6 +48,6 @@ echo   - iPhone: Kamera ile QR kodu okut, "Expo Go'da ac" bildirimine dokun.
 echo   - Android: Expo Go uygulamasini ac, "Scan QR code" ile okut.
 echo   - Kapatmak icin bu pencereyi kapat.
 echo.
-call npx expo start --tunnel
+call npx expo start --tunnel --clear
 echo.
 pause
