@@ -14,6 +14,10 @@ Expo (React Native) + Expo Router + TypeScript ile yazıldı. iOS, Android ve we
 
 ## Çalıştırma
 
+**Windows'ta en kolay yol:** ZIP'i çıkardıktan sonra ana klasördeki **`LezzetHub-Baslat.bat`** dosyasına çift tıkla. Gerekli paketleri kurar ve telefonla okutacağın QR kodu açar (bilgisayarında [Node.js](https://nodejs.org) kurulu olmalı).
+
+Elle çalıştırmak için:
+
 ```bash
 cd lezzethub-app
 npm install
