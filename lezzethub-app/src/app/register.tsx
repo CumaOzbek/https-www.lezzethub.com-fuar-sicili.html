@@ -31,7 +31,7 @@ export default function Register() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
       <Screen header={<Header title="Kayıt ol" subtitle="Hatay’daki komşularınla buluş" />}>
         <Card>
           <Field label="Ad Soyad" icon="person-outline" value={name} onChangeText={setName} placeholder="Ayşe Demir" autoComplete="name" />

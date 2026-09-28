@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Redirect, Tabs } from 'expo-router';
 import type { ColorValue } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { IconName } from '../../components/ui';
 import { useStore } from '../../lib/store';
@@ -14,7 +15,9 @@ function icon(on: IconName, off: IconName) {
 
 export default function AdminLayout() {
   const { me, db } = useStore();
-  if (!me) return <Redirect href="/login" />;
+  const bottomInset = Math.max(useSafeAreaInsets().bottom, 8);
+  // Çıkış yapıldığında ana sayfaya dön (AdminHeader da '/' adresine yönlendirir).
+  if (!me) return <Redirect href="/" />;
   if (me.role !== 'admin') return <Redirect href="/" />;
   const pending = db.payments.filter((p) => p.status === 'pending').length;
 
@@ -24,8 +27,9 @@ export default function AdminLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
-        tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.line, height: 64, paddingTop: 6, paddingBottom: 8 },
+        tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.line, height: 58 + bottomInset, paddingTop: 6, paddingBottom: bottomInset },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
+        tabBarLabelPosition: 'below-icon',
         tabBarBadgeStyle: { backgroundColor: colors.primary, fontSize: 10 },
         sceneStyle: { backgroundColor: colors.cream },
       }}

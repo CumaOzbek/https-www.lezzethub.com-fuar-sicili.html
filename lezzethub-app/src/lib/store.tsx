@@ -38,7 +38,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const commit = useCallback((next: DB) => {
     dbRef.current = next;
     setDb(next);
-    AsyncStorage.setItem(DB_KEY, JSON.stringify(next)).catch(() => {});
+    AsyncStorage.setItem(DB_KEY, JSON.stringify(next)).catch((e) => console.warn('LezzetHub: veriler kaydedilemedi', e));
   }, []);
 
   const setSession = useCallback((id: string | null) => {

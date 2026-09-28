@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { LoginRequired } from '../components/domain';
 import { EmptyState, Header, Screen } from '../components/ui';
+import { MESSAGE_PREFIX } from '../lib/api';
 import { timeAgo } from '../lib/format';
 import { useStore } from '../lib/store';
 import { colors, font, radius, shadowSoft } from '../lib/theme';
@@ -39,11 +40,11 @@ export default function Notifications() {
         list.map((n) => (
           <Pressable
             key={n.id}
-            onPress={() => n.orderId && router.push(n.title.startsWith('💬') && me.role !== 'admin' ? `/chat/${n.orderId}` : `/order/${n.orderId}`)}
+            onPress={() => n.orderId && router.push(n.title.startsWith(MESSAGE_PREFIX) && me.role !== 'admin' ? `/chat/${n.orderId}` : `/order/${n.orderId}`)}
             style={({ pressed }) => [styles.item, unreadAtOpen.has(n.id) && styles.unread, pressed && { opacity: 0.8 }]}
           >
             <View style={styles.icon}>
-              <Ionicons name={n.title.startsWith('💬') ? 'chatbubble-ellipses' : n.orderId ? 'receipt' : 'sparkles'} size={18} color={colors.primary} />
+              <Ionicons name={n.title.startsWith(MESSAGE_PREFIX) ? 'chatbubble-ellipses' : n.orderId ? 'receipt' : 'sparkles'} size={18} color={colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={font.h3}>{n.title}</Text>

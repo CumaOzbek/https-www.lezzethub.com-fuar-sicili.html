@@ -17,7 +17,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { STATUS_META, initials } from '../lib/format';
-import { colors, font, radius, shadow, shadowSoft } from '../lib/theme';
+import { colors, font, noOutline, radius, shadow, shadowSoft } from '../lib/theme';
 import type { OrderStatus } from '../lib/types';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -39,7 +39,8 @@ export function Screen({
   footer?: ReactNode;
   contentStyle?: StyleProp<ViewStyle>;
 }) {
-  const inner = [padded && { paddingHorizontal: 16 }, { paddingBottom: 32, paddingTop: 8 }, contentStyle];
+  const insets = useSafeAreaInsets();
+  const inner = [padded && { paddingHorizontal: 16 }, { paddingBottom: 32 + (footer ? 0 : insets.bottom), paddingTop: 8 }, contentStyle];
   return (
     <View style={styles.screen}>
       {header}
@@ -476,7 +477,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: radius.md,
     borderWidth: 1.5, borderColor: colors.line, paddingHorizontal: 12,
   },
-  input: { flex: 1, fontSize: 15, color: colors.ink, paddingVertical: 12, minHeight: 46, outlineStyle: 'none' } as object,
+  input: { flex: 1, fontSize: 15, color: colors.ink, paddingVertical: 12, minHeight: 46, ...noOutline },
   error: { color: colors.danger, fontSize: 12, marginTop: 4, marginLeft: 2 },
   hint: { color: colors.muted, fontSize: 12, marginTop: 4, marginLeft: 2 },
   chip: {

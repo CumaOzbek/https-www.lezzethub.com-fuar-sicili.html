@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Redirect, Tabs, router } from 'expo-router';
 import { StyleSheet, View, type ColorValue } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { IconName } from '../../components/ui';
 import { useStore, useUnread } from '../../lib/store';
@@ -15,6 +16,7 @@ function icon(on: IconName, off: IconName) {
 export default function TabsLayout() {
   const { me, db } = useStore();
   const unread = useUnread();
+  const bottomInset = Math.max(useSafeAreaInsets().bottom, 8);
   if (me?.role === 'admin') return <Redirect href="/admin" />;
   const sellerPending = me ? db.orders.filter((o) => o.sellerId === me.id && o.status === 'seller_pending').length : 0;
   const orderBadge = sellerPending + unread.messages;
@@ -25,8 +27,9 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
-        tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.line, height: 64, paddingTop: 6, paddingBottom: 8 },
+        tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.line, height: 58 + bottomInset, paddingTop: 6, paddingBottom: bottomInset },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
+        tabBarLabelPosition: 'below-icon',
         tabBarBadgeStyle: { backgroundColor: colors.primary, fontSize: 10 },
         sceneStyle: { backgroundColor: colors.cream },
       }}

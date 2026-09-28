@@ -10,7 +10,7 @@ import { Avatar, EmptyState, Header, IconButton, StatusBadge } from '../../compo
 import * as api from '../../lib/api';
 import { chatTime } from '../../lib/format';
 import { useStore } from '../../lib/store';
-import { colors, radius, shadowSoft } from '../../lib/theme';
+import { colors, noOutline, radius, shadowSoft } from '../../lib/theme';
 
 const QUICK = ['Merhaba 👋', 'Siparişiniz hazır ✅', 'Yola çıktım 🛵', 'Teşekkürler 🙏'];
 
@@ -24,7 +24,10 @@ export default function Chat() {
 
   const order = db.orders.find((o) => o.id === id);
   const messages = db.messages.filter((m) => m.orderId === id);
-  const unreadForMe = me ? messages.filter((m) => m.receiverId === me.id && !m.read).length : 0;
+  const unreadForMe = me
+    ? messages.filter((m) => m.receiverId === me.id && !m.read).length +
+      db.notifications.filter((n) => n.userId === me.id && n.orderId === id && n.title.startsWith(api.MESSAGE_PREFIX) && !n.read).length
+    : 0;
 
   useEffect(() => {
     if (me && unreadForMe > 0) mutate((d) => api.markChatRead(d, me.id, id));
@@ -57,7 +60,7 @@ export default function Chat() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.cream }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.cream }} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
       <Header
         title={other?.name ?? 'Kullanıcı'}
         subtitle={`${order.listingTitle} · ${order.code}`}
@@ -144,7 +147,7 @@ const styles = StyleSheet.create({
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, width: '100%', maxWidth: 680, alignSelf: 'center' },
   input: {
     flex: 1, maxHeight: 110, minHeight: 44, backgroundColor: colors.cream, borderRadius: 22, paddingHorizontal: 16, paddingTop: 11, paddingBottom: 11,
-    fontSize: 15, color: colors.ink, borderWidth: 1, borderColor: colors.line, outlineStyle: 'none',
-  } as object,
+    fontSize: 15, color: colors.ink, borderWidth: 1, borderColor: colors.line, ...noOutline,
+  },
   send: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
 });

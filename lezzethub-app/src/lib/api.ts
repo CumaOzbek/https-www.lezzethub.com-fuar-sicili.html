@@ -16,6 +16,9 @@ import type {
 
 export class ApiError extends Error {}
 
+/** Mesaj bildirimlerinin başlık öneki. */
+export const MESSAGE_PREFIX = '💬';
+
 const fail = (msg: string): never => {
   throw new ApiError(msg);
 };
@@ -377,7 +380,7 @@ export function sendMessage(db: DB, senderId: string, orderId: string, text: str
   const receiverId = senderId === order.buyerId ? order.sellerId : order.buyerId;
   db.messages.push({ id: uid(), orderId, senderId, receiverId, text: body, createdAt: now(), read: false });
   const sender = getUser(db, senderId);
-  notify(db, receiverId, `💬 ${sender?.name ?? 'Yeni mesaj'}`, body.length > 80 ? body.slice(0, 80) + '…' : body, orderId);
+  notify(db, receiverId, `${MESSAGE_PREFIX} ${sender?.name ?? 'Yeni mesaj'}`, body.length > 80 ? body.slice(0, 80) + '…' : body, orderId);
 }
 
 export function markChatRead(db: DB, userId: string, orderId: string) {
@@ -385,6 +388,13 @@ export function markChatRead(db: DB, userId: string, orderId: string) {
   for (const m of db.messages) {
     if (m.orderId === orderId && m.receiverId === userId && !m.read) {
       m.read = true;
+      changed = true;
+    }
+  }
+  // Aynı sohbetin mesaj bildirimleri de okunmuş sayılır.
+  for (const n of db.notifications) {
+    if (n.userId === userId && n.orderId === orderId && n.title.startsWith(MESSAGE_PREFIX) && !n.read) {
+      n.read = true;
       changed = true;
     }
   }

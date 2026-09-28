@@ -65,7 +65,7 @@ export default function ListingForm() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
       <Screen
         header={<Header title={existing ? 'İlanı Düzenle' : 'Yeni İlan'} subtitle="Ev yapımı lezzetini paylaş" />}
         footer={

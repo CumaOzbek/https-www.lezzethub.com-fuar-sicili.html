@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
-import { Animated, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ApiError } from '../lib/api';
@@ -22,6 +22,9 @@ interface FeedbackValue {
   run: (fn: () => unknown | Promise<unknown>, success?: string) => Promise<boolean>;
 }
 
+// Web'de yerel animasyon sürücüsü yok; uyarıyı önlemek için yalnızca iOS/Android'de kullanılır.
+const NATIVE_DRIVER = Platform.OS !== 'web';
+
 const Ctx = createContext<FeedbackValue | null>(null);
 
 export function FeedbackProvider({ children }: { children: ReactNode }) {
@@ -37,9 +40,9 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
     (message, kind = 'success') => {
       if (timer.current) clearTimeout(timer.current);
       setToastState({ message, kind });
-      Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+      Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: NATIVE_DRIVER }).start();
       timer.current = setTimeout(() => {
-        Animated.timing(opacity, { toValue: 0, duration: 220, useNativeDriver: true }).start(() => setToastState(null));
+        Animated.timing(opacity, { toValue: 0, duration: 220, useNativeDriver: NATIVE_DRIVER }).start(() => setToastState(null));
       }, 2600);
     },
     [opacity],

@@ -246,6 +246,10 @@ export function PriceBreakdown({ b, unitPrice, quantity, perspective }: { b: Bre
 
 /* ------------------------------ Görsel seçimi ------------------------------ */
 
+/** Web'de tarayıcı depolaması ~5 MB ile sınırlı olduğundan tek görsel ~1 MB'ı geçmemeli. */
+const MAX_WEB_IMAGE_CHARS = 1_400_000;
+class ImageTooLargeError extends Error {}
+
 async function pick(from: 'camera' | 'library', aspect: [number, number]): Promise<string | undefined> {
   const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], allowsEditing: true, aspect, quality: 0.6, base64: Platform.OS === 'web' };
   if (from === 'camera') {
@@ -259,7 +263,10 @@ async function pick(from: 'camera' | 'library', aspect: [number, number]): Promi
   const a = r.assets[0];
   if (!a) return undefined;
   // Web'de blob: adresleri kalıcı değildir; base64 veri adresi saklanır.
-  if (Platform.OS === 'web' && a.base64) return `data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}`;
+  if (Platform.OS === 'web' && a.base64) {
+    if (a.base64.length > MAX_WEB_IMAGE_CHARS) throw new ImageTooLargeError();
+    return `data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}`;
+  }
   return a.uri;
 }
 
@@ -270,8 +277,8 @@ export function ImagePickerField({ value, onChange, category, title }: { value?:
       const uri = await pick(from, [4, 3]);
       if (uri) onChange(uri);
       else if (from === 'camera') toast('Kamera izni verilmedi veya çekim iptal edildi.', 'info');
-    } catch {
-      toast('Görsel seçilemedi.', 'error');
+    } catch (e) {
+      toast(e instanceof ImageTooLargeError ? 'Görsel çok büyük. Lütfen daha küçük bir fotoğraf seçin.' : 'Görsel seçilemedi.', 'error');
     }
   };
   return (
@@ -294,9 +301,14 @@ export function ImagePickerField({ value, onChange, category, title }: { value?:
 }
 
 export function AvatarPicker({ user, value, onChange }: { user: User; value?: string; onChange: (uri?: string) => void }) {
+  const { toast } = useFeedback();
   const choose = async () => {
-    const uri = await pick('library', [1, 1]).catch(() => undefined);
-    if (uri) onChange(uri);
+    try {
+      const uri = await pick('library', [1, 1]);
+      if (uri) onChange(uri);
+    } catch (e) {
+      toast(e instanceof ImageTooLargeError ? 'Görsel çok büyük. Lütfen daha küçük bir fotoğraf seçin.' : 'Görsel seçilemedi.', 'error');
+    }
   };
   return (
     <Pressable onPress={choose} style={{ alignSelf: 'center', marginBottom: 18 }} accessibilityLabel="Profil fotoğrafını değiştir">

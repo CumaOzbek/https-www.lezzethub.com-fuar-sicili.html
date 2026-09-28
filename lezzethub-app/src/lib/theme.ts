@@ -24,6 +24,9 @@ export const colors = {
   neutralBg: '#f3f4f6',
 };
 
+/** Web'de odak çerçevesini kaldırır; iOS/Android 'none' değerini desteklemediği için yalnızca web'e uygulanır. */
+export const noOutline = Platform.select({ web: { outlineStyle: 'none' } as object, default: {} });
+
 export const radius = { sm: 10, md: 14, lg: 20, xl: 28, pill: 999 };
 
 export const space = (n: number) => n * 4;

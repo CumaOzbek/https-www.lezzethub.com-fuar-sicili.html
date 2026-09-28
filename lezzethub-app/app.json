@@ -37,6 +37,15 @@
           "photosPermission": "İlan ve profil fotoğrafı seçmek için galerinize erişim gerekiyor.",
           "cameraPermission": "İlan ve profil fotoğrafı çekmek için kameranıza erişim gerekiyor."
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#fffaf5"
+        }
       ]
     ],
     "scheme": "lezzethub",
