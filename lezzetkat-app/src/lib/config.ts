@@ -1,0 +1,26 @@
+// Ortam ayarları. EXPO_PUBLIC_ ile başlayan değişkenler derleme sırasında uygulamaya gömülür
+// (.env dosyası veya EAS ortam değişkenleri). Supabase ayarı yoksa uygulama cihaz içi demo modunda çalışır.
+
+export const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+export const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+
+/** Canlı mod: Supabase yapılandırıldıysa veriler sunucuda tutulur ve tüm kullanıcılar arasında paylaşılır. */
+export const IS_REMOTE = !!SUPABASE_URL && !!SUPABASE_ANON_KEY;
+
+/** Paylaşılan ilan bağlantılarının kök adresi (web sürümünün yayınlandığı alan adı). */
+export const SHARE_BASE_URL = (process.env.EXPO_PUBLIC_SHARE_BASE_URL ?? 'https://www.lezzetkat.com').replace(/\/$/, '');
+
+/** Destek ve KVKK başvuruları için iletişim adresi. */
+export const SUPPORT_EMAIL = process.env.EXPO_PUBLIC_SUPPORT_EMAIL ?? 'ozbek.info@gmail.com';
+
+/** Supabase Storage'daki fotoğraf kovasının adı. */
+export const PHOTO_BUCKET = 'photos';
+
+/** Hijyen belgesi ve ehliyet gibi belgelerin tutulduğu ÖZEL kova (yalnızca sahibi ve adminler okur). */
+export const DOCUMENT_BUCKET = 'documents';
+
+/**
+ * Yönetici e-postaları. Canlı modda asıl liste veritabanındadır (app_settings.admin_emails);
+ * bu liste cihaz içi demo modunda kayıt olan hesapları yönetici yapmak için kullanılır.
+ */
+export const ADMIN_EMAILS = ['ozbek.info@gmail.com'];
