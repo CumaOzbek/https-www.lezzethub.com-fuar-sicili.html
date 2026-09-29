@@ -52,7 +52,9 @@ Demo verisi yalnızca o cihazda tutulur; **Profil → Demo verilerini sıfırla*
 Canlı modda tüm kullanıcılar aynı veritabanını kullanır: Ayşe’nin ilanını Mehmet kendi telefonunda görür, mesajlar ve bildirimler anında düşer.
 
 1. **Proje aç:** https://supabase.com → ücretsiz hesap → *New project* (bölge olarak Frankfurt önerilir).
-2. **Veritabanını kur:** Supabase panelinde *SQL Editor → New query*. Sırasıyla şu dosyaların içeriğini yapıştırıp **Run** de:
+2. **Veritabanını kur:** Supabase panelinde *SQL Editor → New query*. **`supabase/kurulum.sql`** dosyasını aç, **içindeki metnin tamamını** kopyalayıp yapıştır ve **Run** de. (Dosya adını değil, içeriğini yapıştır. GitHub’da dosyayı açıp sağ üstteki “Copy raw file” düğmesiyle kopyalayabilirsin.)
+
+   Bu tek dosya aşağıdaki dört dosyanın birleşimidir; istersen onları sırayla ayrı ayrı da çalıştırabilirsin:
    1. `supabase/locations.sql`: 81 il ve 973 ilçe (konum doğrulaması için)
    2. `supabase/schema.sql` (önceki sürümü kurduysan yeniden çalıştırman yeterli; eksik sütunları kendisi ekler): tablolar, güvenlik kuralları, sipariş/ödeme akışı, satıcı/kurye başvuruları
    3. `supabase/storage.sql`: fotoğraf kovası (herkese açık) ve belge kovası (özel)

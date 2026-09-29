@@ -420,5 +420,9 @@ ok((await q(`select count(*)::int n from pg_publication_tables where pubname = '
 r = await q(`select id, public from storage.buckets order by id`);
 ok(r.length === 2 && r[0].id === 'documents' && r[0].public === false && r[1].public === true, 'documents bucket private');
 
+// Tek dosyalık kurulum (kurulum.sql) güncel mi?
+const { buildKurulum } = await import(path.resolve(DIR, '../scripts/build-kurulum.mjs'));
+ok(read('kurulum.sql') === buildKurulum(), 'kurulum.sql is up to date (npm run db:bundle)');
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

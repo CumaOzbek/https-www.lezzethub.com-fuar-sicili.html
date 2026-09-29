@@ -50,7 +50,8 @@
     "test": "tsx tests/logic.test.ts",
     "test:db": "node supabase/tests/schema.test.mjs",
     "test:payments": "tsx supabase/tests/payments.test.mts",
-    "test:all": "npm test && npm run test:db && npm run test:payments"
+    "test:all": "npm test && npm run test:db && npm run test:payments",
+    "db:bundle": "node scripts/build-kurulum.mjs"
   },
   "private": true
 }
