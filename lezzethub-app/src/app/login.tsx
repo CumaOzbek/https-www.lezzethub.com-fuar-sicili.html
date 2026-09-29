@@ -1,10 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useFeedback } from '../components/feedback';
+import { ApiError } from '../lib/api';
 import { Logo } from '../components/Logo';
 import { Button, Field, Row, useLightStatusBar } from '../components/ui';
 import { DEMO_ACCOUNTS } from '../lib/seed';
@@ -13,6 +14,8 @@ import { colors, font, radius, shadow } from '../lib/theme';
 
 export default function Login() {
   const { actions, mode } = useStore();
+  const params = useLocalSearchParams<{ admin?: string }>();
+  const [adminMode, setAdminMode] = useState(params.admin === '1');
   const { run } = useFeedback();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
@@ -25,10 +28,14 @@ export default function Login() {
     setLoading(true);
     await run(async () => {
       const user = await actions.login(e, p);
-      // Admin ve kullanıcı aynı ekrandan girer, role göre yönlendirilir.
+      if (adminMode && user.role !== 'admin') {
+        await actions.logout();
+        throw new ApiError('Bu hesabın yönetici yetkisi yok. Normal giriş için “Kullanıcı girişi”ni kullan.');
+      }
+      // Admin ve kullanıcı aynı ekrandan da girebilir; role göre yönlendirilir.
       if (router.canDismiss()) router.dismissAll();
       router.replace(user.role === 'admin' ? '/admin' : '/');
-    }, 'Giriş başarılı, hoş geldin!');
+    }, adminMode ? 'Yönetici girişi başarılı' : 'Giriş başarılı, hoş geldin!');
     setLoading(false);
   };
 
@@ -45,7 +52,7 @@ export default function Login() {
             </View>
             <Row gap={16} style={{ justifyContent: 'center', marginTop: 18 }}>
               {[
-                { icon: 'shield-checkmark-outline' as const, text: 'Onaylı ödeme' },
+                { icon: 'shield-checkmark-outline' as const, text: 'Onaylı satıcılar' },
                 { icon: 'location-outline' as const, text: 'Mahalle bazlı' },
                 { icon: 'chatbubbles-outline' as const, text: 'Doğrudan iletişim' },
               ].map((b) => (
@@ -60,8 +67,20 @@ export default function Login() {
 
         <View style={[styles.inner, { paddingHorizontal: 16, marginTop: -36 }]}>
           <View style={styles.card}>
-            <Text style={font.h2}>Giriş yap</Text>
-            <Text style={[font.small, { marginTop: 4, marginBottom: 18 }]}>Alıcı, satıcı ve yöneticiler aynı ekrandan giriş yapar.</Text>
+            {adminMode ? (
+              <>
+                <Row gap={8}>
+                  <Ionicons name="shield-half-outline" size={24} color={colors.primary} />
+                  <Text style={font.h2}>Yönetici girişi</Text>
+                </Row>
+                <Text style={[font.small, { marginTop: 4, marginBottom: 18 }]}>Yalnızca yönetici yetkisi olan hesaplar giriş yapabilir.</Text>
+              </>
+            ) : (
+              <>
+                <Text style={font.h2}>Giriş yap</Text>
+                <Text style={[font.small, { marginTop: 4, marginBottom: 18 }]}>Alıcı, satıcı ve kuryeler buradan giriş yapar.</Text>
+              </>
+            )}
             <Field label="E-posta" icon="mail-outline" value={email} onChangeText={setEmail} placeholder="ornek@eposta.com" keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
             <Field
               label="Şifre"
@@ -83,13 +102,25 @@ export default function Login() {
                 <Text style={{ color: colors.primary, fontWeight: '700' }}>Şifremi unuttum</Text>
               </Pressable>
             )}
-            <Button title="Giriş Yap" icon="log-in-outline" onPress={() => submit()} loading={loading} style={{ marginTop: 4 }} />
-            <Row style={{ justifyContent: 'center', marginTop: 16 }} gap={4}>
-              <Text style={font.body}>Hesabın yok mu?</Text>
-              <Pressable onPress={() => router.replace('/register')} hitSlop={6}>
-                <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 15 }}>Kayıt ol</Text>
-              </Pressable>
-            </Row>
+            <Button
+              title={adminMode ? 'Yönetici Olarak Giriş Yap' : 'Giriş Yap'}
+              icon={adminMode ? 'shield-checkmark-outline' : 'log-in-outline'}
+              onPress={() => submit()}
+              loading={loading}
+              style={{ marginTop: 4 }}
+            />
+            {!adminMode && (
+              <Row style={{ justifyContent: 'center', marginTop: 16 }} gap={4}>
+                <Text style={font.body}>Hesabın yok mu?</Text>
+                <Pressable onPress={() => router.replace('/register')} hitSlop={6}>
+                  <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 15 }}>Kayıt ol</Text>
+                </Pressable>
+              </Row>
+            )}
+            <Pressable onPress={() => setAdminMode((v) => !v)} style={styles.adminSwitch} hitSlop={6} accessibilityRole="button">
+              <Ionicons name={adminMode ? 'person-outline' : 'shield-half-outline'} size={16} color={colors.muted} />
+              <Text style={{ color: colors.muted, fontWeight: '700' }}>{adminMode ? 'Kullanıcı girişine dön' : 'Yönetici girişi'}</Text>
+            </Pressable>
           </View>
 
           {mode === 'local' && (
@@ -130,6 +161,7 @@ export default function Login() {
 }
 
 const styles = StyleSheet.create({
+  adminSwitch: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.line },
   top: { backgroundColor: colors.primary, paddingBottom: 60, paddingHorizontal: 16, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
   inner: { width: '100%', maxWidth: 480, alignSelf: 'center' },
   back: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' },

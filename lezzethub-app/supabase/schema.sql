@@ -69,6 +69,9 @@ create table if not exists public.app_settings (
   value text not null
 );
 insert into public.app_settings(key, value) values ('payment_mode', 'offline') on conflict (key) do nothing;
+-- Yönetici e-postaları (virgülle ayrılmış). Bu adreslerle kayıt olan hesaplar e-postaları doğrulandığında
+-- otomatik olarak yönetici olur. Bu satır istemcilere gösterilmez (bkz. settings_read politikası).
+insert into public.app_settings(key, value) values ('admin_emails', 'ozbek.info@gmail.com') on conflict (key) do nothing;
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -359,6 +362,23 @@ end $$;
 -- Yeni kullanıcı: auth.users'a kayıt eklendiğinde profil oluştur
 -- ---------------------------------------------------------------------
 
+-- Yönetici e-postası listesinde mi? (büyük/küçük harf ve boşluk duyarsız)
+create or replace function public._is_admin_email(p_email text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce(lower(btrim(p_email)) = any (
+    string_to_array(lower(regexp_replace((select value from app_settings where key = 'admin_emails'), '\s', '', 'g')), ',')
+  ), false)
+$$;
+
+-- E-postası doğrulanmış ve listede olan hesabı yönetici yapar (doğrulanmamış e-postaya yetki verilmez).
+create or replace function public._promote_configured_admin(p_user uuid, p_email text, p_confirmed timestamptz) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if p_confirmed is not null and _is_admin_email(p_email) then
+    update profiles set role = 'admin', active = true where id = p_user and role <> 'admin';
+  end if;
+end $$;
+
 create or replace function public.handle_new_user() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare
@@ -378,6 +398,7 @@ begin
   values (new.id, coalesce(new.email, ''),
           case when (meta->>'accepted_terms')::boolean then now() end,
           case when (meta->>'kvkk_consent')::boolean then now() end);
+  perform _promote_configured_admin(new.id, new.email, new.email_confirmed_at);
   perform _notify(new.id, 'LezzetHub’a hoş geldin! 🧡',
     case v_intent
       when 'seller' then 'Satış yapmak için hijyen belgeni yükleyerek satıcı başvurunu tamamla.'
@@ -389,6 +410,24 @@ end $$;
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- E-posta doğrulandığında (doğrulama bağlantısına tıklanınca) yönetici listesini kontrol et.
+create or replace function public.handle_user_confirmed() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  perform _promote_configured_admin(new.id, new.email, new.email_confirmed_at);
+  return new;
+end $$;
+
+drop trigger if exists on_auth_user_confirmed on auth.users;
+create trigger on_auth_user_confirmed after update of email_confirmed_at on auth.users
+  for each row when (old.email_confirmed_at is null and new.email_confirmed_at is not null)
+  execute function public.handle_user_confirmed();
+
+-- Kurulum sırasında listede olan mevcut (doğrulanmış) hesapları yönetici yap.
+update public.profiles p set role = 'admin', active = true
+from auth.users u
+where u.id = p.id and u.email_confirmed_at is not null and public._is_admin_email(u.email) and p.role <> 'admin';
 
 -- ---------------------------------------------------------------------
 -- Profil ve hesap
@@ -1057,7 +1096,8 @@ grant select on public.profile_private, public.verifications, public.courier_pro
   public.payments, public.notifications, public.reports, public.blocks to authenticated;
 
 drop policy if exists settings_read on public.app_settings;
-create policy settings_read on public.app_settings for select using (true);
+-- Yalnızca herkese açık ayarlar okunabilir; yönetici e-postaları gizli kalır.
+create policy settings_read on public.app_settings for select using (key in ('payment_mode'));
 
 drop policy if exists districts_read on public.tr_districts;
 create policy districts_read on public.tr_districts for select using (true);

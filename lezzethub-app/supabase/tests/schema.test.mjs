@@ -14,7 +14,7 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log('FAIL:', m); } 
 await db.exec(`
   create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
   create schema auth;
-  create table auth.users (id uuid primary key default gen_random_uuid(), email text unique, raw_user_meta_data jsonb);
+  create table auth.users (id uuid primary key default gen_random_uuid(), email text unique, raw_user_meta_data jsonb, email_confirmed_at timestamptz);
   create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
   grant usage on schema auth to anon, authenticated, service_role; grant execute on function auth.uid() to anon, authenticated, service_role;
   grant usage on schema public to anon, authenticated, service_role;
@@ -52,6 +52,20 @@ r = await q(`select body from notifications where user_id = $1`, [ayse]);
 ok(r.length === 1 && r[0].body.includes('hijyen belgeni'), 'seller intent welcome notification');
 r = await q(`select body from notifications where user_id = $1`, [kemal]);
 ok(r[0].body.includes('ehliyet'), 'courier intent welcome notification');
+
+// Yönetici e-postası: doğrulanmış e-postayla kayıt olan hesap otomatik yönetici olur
+const boss = (await db.query(`insert into auth.users(email, raw_user_meta_data, email_confirmed_at) values ('Ozbek.Info@gmail.com', '{"name":"Cuma Özbek"}', now()) returning id`)).rows[0].id;
+ok((await q(`select role from profiles where id = $1`, [boss]))[0].role === 'admin', 'configured admin email (confirmed) becomes admin');
+const pending = (await db.query(`insert into auth.users(email, raw_user_meta_data) values ('taslak@x.com', '{"name":"Taslak"}') returning id`)).rows[0].id;
+await db.exec(`update app_settings set value = 'ozbek.info@gmail.com, taslak@x.com' where key = 'admin_emails'`);
+ok((await q(`select role from profiles where id = $1`, [pending]))[0].role === 'user', 'unconfirmed email is not promoted');
+await db.query(`update auth.users set email_confirmed_at = now() where id = $1`, [pending]);
+ok((await q(`select role from profiles where id = $1`, [pending]))[0].role === 'admin', 'promoted when email gets confirmed');
+await db.exec(`update app_settings set value = 'ozbek.info@gmail.com' where key = 'admin_emails'`);
+await db.query(`delete from auth.users where id in ($1, $2)`, [boss, pending]);
+await as(null);
+ok((await q(`select key from app_settings`)).map((r) => r.key).join() === 'payment_mode', 'admin emails hidden from clients');
+await su();
 
 // Doğrulama yardımcıları
 r = await q(`select _normalize_iban('TR33 0006 1005 1978 6457 8413 26') a, _normalize_iban('TR330006100519786457841327') b, _normalize_phone('+90 532 111 22 33') c, _normalize_phone('12345') d`);

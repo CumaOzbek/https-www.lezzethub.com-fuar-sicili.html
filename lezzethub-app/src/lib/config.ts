@@ -18,3 +18,9 @@ export const PHOTO_BUCKET = 'photos';
 
 /** Hijyen belgesi ve ehliyet gibi belgelerin tutulduğu ÖZEL kova (yalnızca sahibi ve adminler okur). */
 export const DOCUMENT_BUCKET = 'documents';
+
+/**
+ * Yönetici e-postaları. Canlı modda asıl liste veritabanındadır (app_settings.admin_emails);
+ * bu liste cihaz içi demo modunda kayıt olan hesapları yönetici yapmak için kullanılır.
+ */
+export const ADMIN_EMAILS = ['ozbek.info@gmail.com'];

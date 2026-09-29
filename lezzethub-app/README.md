@@ -66,7 +66,7 @@ Canlı modda tüm kullanıcılar aynı veritabanını kullanır: Ayşe’nin ila
    EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJ...
    ```
    Uygulamayı yeniden başlat (`npx expo start -c`). Giriş ekranındaki demo bölümü kaybolur, "Şifremi unuttum" görünür.
-5. **İlk admini ata:** Uygulamadan normal şekilde kayıt ol. Ardından `supabase/make-admin.sql` içindeki e-postayı kendi adresinle değiştirip SQL Editor’de çalıştır. Diğer adminleri uygulamadaki **Admin → Kullanıcılar** ekranından atayabilirsin.
+5. **Yönetici hesabı:** `ozbek.info@gmail.com` kayıtlı yönetici e-postasıdır. Bu adresle uygulamadan kayıt ol; e-posta doğrulanınca hesap otomatik olarak yönetici olur (hesap zaten varsa `kurulum.sql`'i yeniden çalıştırmak yeterli). Giriş ekranındaki **Yönetici girişi** bağlantısıyla gir. Yönetici e-postalarını değiştirmek için: `update public.app_settings set value = 'a@x.com,b@y.com' where key = 'admin_emails';`. Diğer adminleri uygulamadaki **Admin → Üyeler** ekranından da atayabilirsin.
 
 6. **(İsteğe bağlı) Online ödeme:** Pilot modda gerekmez. Şirket ve iyzico hazır olunca aşağıdaki bölüme bak.
 

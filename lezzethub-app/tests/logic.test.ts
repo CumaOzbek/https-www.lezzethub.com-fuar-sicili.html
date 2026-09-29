@@ -90,6 +90,14 @@ const reg = (over: Partial<api.RegisterInput> = {}): api.RegisterInput => ({
     ok(db.notifications.some((n) => n.userId === u.id && n.body.includes('hijyen belgeni')), 'satıcı niyetiyle kayıtta yönlendirme');
   }
 
+  /* Yönetici e-postası (demo modu) */
+  {
+    const db = clone(seed);
+    const boss = api.register(db, reg({ email: 'Ozbek.Info@gmail.com' }), 'h');
+    const normal = api.register(db, reg({ email: 'normal@x.com' }), 'h');
+    ok(boss.role === 'admin' && normal.role === 'user', 'yönetici e-postasıyla kayıt yönetici olur');
+  }
+
   /* Satıcı başvurusu ve onay */
   {
     const db = clone(seed);

@@ -2,6 +2,7 @@
 // Cihaz içi (demo) modda doğrudan kullanılır; canlı modda aynı kurallar Supabase'deki
 // sunucu fonksiyonlarında (supabase/schema.sql) uygulanır. Arayüz availableActions'ı her iki modda da kullanır.
 import { calcBreakdown } from './commission';
+import { ADMIN_EMAILS } from './config';
 import { DELIVERY_LABEL, appointmentText, statusLabel, tl } from './format';
 import { isValidDistrict, isValidProvince } from './locations';
 import {
@@ -147,7 +148,7 @@ export function register(db: DB, input: RegisterInput, passwordHash: string): Us
     name: input.name.trim(),
     email: normalizeEmail(input.email),
     passwordHash,
-    role: 'user',
+    role: ADMIN_EMAILS.includes(normalizeEmail(input.email)) ? 'admin' : 'user',
     active: true,
     bio: '',
     province: input.province,
