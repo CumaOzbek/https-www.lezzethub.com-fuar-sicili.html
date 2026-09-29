@@ -1,28 +1,60 @@
 -- =====================================================================
--- LezzetHub — Supabase veritabanı şeması
--- Supabase panelinde: SQL Editor → New query → bu dosyanın tamamını yapıştır → Run.
--- Ardından storage.sql ve realtime.sql dosyalarını da aynı şekilde çalıştır.
+-- LezzetHub — Supabase veritabanı şeması (Türkiye geneli)
+-- Supabase panelinde SQL Editor'de SIRAYLA çalıştır:
+--   1) locations.sql   2) schema.sql (bu dosya)   3) storage.sql   4) realtime.sql
 --
 -- Güvenlik modeli:
---  * Tablolara istemciden doğrudan yazma YOKTUR (insert/update/delete yetkisi kaldırıldı).
---  * Tüm değişiklikler aşağıdaki SECURITY DEFINER fonksiyonlarıyla yapılır; iş kuralları
---    (sipariş durum akışı, komisyon, yetki) sunucuda uygulanır.
---  * Okuma satır düzeyi güvenlik (RLS) ile sınırlanır.
+--  * Tablolara istemciden doğrudan yazma YOKTUR; değişiklikler SECURITY DEFINER fonksiyonlarıyla yapılır.
+--  * Satış için onaylı hijyen belgesi, kurye listesinde görünmek için onaylı A2/B ehliyet gerekir.
+--  * Ödemeyi onaylama / iade yalnızca sunucudaki ödeme fonksiyonları (service_role) tarafından yapılır.
+--  * Okumalar satır düzeyi güvenlik (RLS) ile sınırlanır.
 -- =====================================================================
 
-
 -- ---------------------------------------------------------------------
--- Sabitler
+-- Sabitler ve yardımcılar
 -- ---------------------------------------------------------------------
-
-create or replace function public.hatay_districts() returns text[]
-language sql immutable as $$
-  select array['Antakya','Arsuz','Altınözü','Belen','Defne','Dörtyol','Erzin','Hassa',
-               'İskenderun','Kırıkhan','Kumlu','Payas','Reyhanlı','Samandağ','Yayladağı']
-$$;
 
 create or replace function public.buyer_fee_rate() returns numeric language sql immutable as $$ select 0.10::numeric $$;
 create or replace function public.seller_fee_rate() returns numeric language sql immutable as $$ select 0.15::numeric $$;
+
+create or replace function public._valid_location(p_province text, p_district text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from tr_districts where province = p_province and district = p_district)
+$$;
+
+create or replace function public._fail(msg text) returns void
+language plpgsql as $$ begin raise exception '%', msg using errcode = 'P0001'; end $$;
+
+-- 05XXXXXXXXX biçimine getirir; geçersizse null.
+create or replace function public._normalize_phone(p text) returns text
+language plpgsql immutable as $$
+declare d text := regexp_replace(coalesce(p, ''), '\D', '', 'g');
+begin
+  if d like '90%' and length(d) = 12 then d := '0' || substr(d, 3); end if;
+  if length(d) = 10 and d like '5%' then d := '0' || d; end if;
+  if d ~ '^05\d{9}$' then return d; end if;
+  return null;
+end $$;
+
+-- TR IBAN biçim + mod-97 kontrolü; geçerliyse boşluksuz büyük harfli IBAN, değilse null.
+create or replace function public._normalize_iban(p text) returns text
+language plpgsql immutable as $$
+declare
+  iban text := upper(regexp_replace(coalesce(p, ''), '\s', '', 'g'));
+  r text; num text := ''; ch text; rem int := 0; i int;
+begin
+  if iban !~ '^TR\d{24}$' then return null; end if;
+  r := substr(iban, 5) || substr(iban, 1, 4);
+  for i in 1..length(r) loop
+    ch := substr(r, i, 1);
+    if ch ~ '[A-Z]' then num := num || (ascii(ch) - 55)::text; else num := num || ch; end if;
+  end loop;
+  for i in 1..length(num) loop
+    rem := (rem * 10 + substr(num, i, 1)::int) % 97;
+  end loop;
+  if rem = 1 then return iban; end if;
+  return null;
+end $$;
 
 -- ---------------------------------------------------------------------
 -- Tablolar
@@ -35,9 +67,12 @@ create table if not exists public.profiles (
   active boolean not null default true,
   bio text not null default '' check (char_length(bio) <= 240),
   avatar_url text,
-  district text not null check (district = any (public.hatay_districts())),
-  neighborhood text not null check (char_length(btrim(neighborhood)) between 1 and 60),
+  province text not null,
+  district text not null,
+  neighborhood text not null check (char_length(btrim(neighborhood)) between 1 and 80),
   availability text not null default '' check (char_length(availability) <= 120),
+  seller_status text not null default 'none' check (seller_status in ('none','pending','approved','rejected')),
+  courier_status text not null default 'none' check (courier_status in ('none','pending','approved','rejected')),
   created_at timestamptz not null default now()
 );
 
@@ -46,7 +81,42 @@ create table if not exists public.profile_private (
   id uuid primary key references public.profiles(id) on delete cascade,
   email text not null,
   address text not null default '' check (char_length(address) <= 300),
-  accepted_terms_at timestamptz
+  phone text not null default '',
+  accepted_terms_at timestamptz,
+  kvkk_consent_at timestamptz
+);
+
+-- Satıcı (hijyen belgesi) ve kurye (ehliyet) başvuruları. Sahibi ve adminler görür.
+create table if not exists public.verifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  kind text not null check (kind in ('seller','courier')),
+  status text not null default 'pending' check (status in ('pending','approved','rejected')),
+  doc_path text not null,          -- 'documents' özel kovasındaki dosya yolu
+  doc_type text not null check (doc_type in ('image','pdf')),
+  doc_number text not null,        -- satıcı: e-Devlet barkod no, kurye: ehliyet belge no
+  license_class text check (license_class in ('A2','B')),
+  iban text,
+  iban_holder text,
+  declaration_at timestamptz,
+  document_consent_at timestamptz not null,
+  admin_note text,
+  submitted_at timestamptz not null default now(),
+  reviewed_at timestamptz,
+  reviewed_by uuid references public.profiles(id) on delete set null,
+  unique (user_id, kind)
+);
+
+-- Onaylı kuryelerin rehber bilgisi (giriş yapmış kullanıcılar görür).
+create table if not exists public.courier_profiles (
+  user_id uuid primary key references public.profiles(id) on delete cascade,
+  license_class text not null check (license_class in ('A2','B')),
+  vehicle text not null check (vehicle in ('motorcycle','car')),
+  phone text not null,
+  service_province text not null,
+  service_districts text[] not null check (cardinality(service_districts) >= 1),
+  available boolean not null default true,
+  updated_at timestamptz not null default now()
 );
 
 create table if not exists public.listings (
@@ -58,16 +128,18 @@ create table if not exists public.listings (
   category text not null check (category in ('ana-yemek','tatli','hamur-isi','meze','corba','salata','icecek','diger')),
   images text[] not null default '{}' check (cardinality(images) <= 6),
   prep_time text not null default '' check (char_length(prep_time) <= 120),
-  delivery text[] not null check (cardinality(delivery) >= 1 and delivery <@ array['courier','pickup']::text[]),
+  delivery text[] not null check (cardinality(delivery) >= 1 and delivery <@ array['pickup','courier','cargo']::text[]),
+  shipping_payer text not null default 'buyer' check (shipping_payer in ('buyer','seller')),
   status text not null default 'active' check (status in ('active','passive')),
   removed_by_admin boolean not null default false,
+  province text not null,
   district text not null,
   neighborhood text not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 create index if not exists listings_owner_idx on public.listings(owner_id);
-create index if not exists listings_district_idx on public.listings(district) where status = 'active';
+create index if not exists listings_location_idx on public.listings(province, district) where status = 'active';
 
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
@@ -79,9 +151,12 @@ create table if not exists public.orders (
   unit_price numeric(10,2) not null,
   quantity int not null check (quantity between 1 and 50),
   appointment timestamptz not null,
-  delivery text not null check (delivery in ('courier','pickup')),
+  delivery text not null check (delivery in ('pickup','courier','cargo')),
+  shipping_payer text not null check (shipping_payer in ('buyer','seller')),
   address text not null default '',
   pickup_address text,
+  shipping_company text,
+  tracking_code text,
   note text not null default '' check (char_length(note) <= 300),
   subtotal numeric(10,2) not null,
   buyer_fee numeric(10,2) not null,
@@ -89,8 +164,10 @@ create table if not exists public.orders (
   buyer_total numeric(10,2) not null,
   seller_net numeric(10,2) not null,
   status text not null default 'seller_pending'
-    check (status in ('seller_pending','approved','payment_pending','paid','completed','rejected','cancelled')),
+    check (status in ('seller_pending','approved','paid','completed','rejected','cancelled')),
   status_note text,
+  payout_status text not null default 'pending' check (payout_status in ('pending','paid')),
+  payout_at timestamptz,
   history jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -101,7 +178,7 @@ create index if not exists orders_seller_idx on public.orders(seller_id);
 create table if not exists public.messages (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references public.orders(id) on delete cascade,
-  sender_id uuid references public.profiles(id) on delete set null, -- null: sistem mesajı
+  sender_id uuid references public.profiles(id) on delete set null,
   receiver_id uuid references public.profiles(id) on delete set null,
   is_system boolean not null default false,
   text text not null check (char_length(text) between 1 and 1000),
@@ -110,16 +187,26 @@ create table if not exists public.messages (
 );
 create index if not exists messages_order_idx on public.messages(order_id, created_at);
 
+-- Online ödemeler (iyzico). Kart bilgisi saklanmaz; yalnızca son 4 hane ve kart ailesi.
 create table if not exists public.payments (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references public.orders(id) on delete cascade,
   amount numeric(10,2) not null,
-  status text not null default 'pending' check (status in ('pending','approved','rejected')),
-  admin_id uuid references public.profiles(id) on delete set null,
-  admin_note text,
+  currency text not null default 'TRY',
+  provider text not null default 'iyzico' check (provider in ('iyzico','test')),
+  status text not null default 'pending' check (status in ('pending','succeeded','failed','refunded')),
+  provider_token text unique,
+  provider_payment_id text,
+  provider_transaction_id text,
+  card_last4 text,
+  card_association text,
+  error_message text,
+  refund_note text,
   created_at timestamptz not null default now(),
-  decided_at timestamptz
+  paid_at timestamptz,
+  refunded_at timestamptz
 );
+create index if not exists payments_order_idx on public.payments(order_id);
 
 create table if not exists public.notifications (
   id uuid primary key default gen_random_uuid(),
@@ -152,7 +239,7 @@ create table if not exists public.blocks (
 );
 
 -- ---------------------------------------------------------------------
--- Yardımcı fonksiyonlar
+-- Oturum ve bildirim yardımcıları
 -- ---------------------------------------------------------------------
 
 create or replace function public.is_admin() returns boolean
@@ -160,7 +247,6 @@ language sql stable security definer set search_path = public as $$
   select exists (select 1 from profiles where id = auth.uid() and role = 'admin' and active)
 $$;
 
--- Oturum açmış ve aktif kullanıcıyı döner; değilse anlaşılır bir hata verir.
 create or replace function public._me() returns public.profiles
 language plpgsql stable security definer set search_path = public as $$
 declare me profiles;
@@ -170,9 +256,6 @@ begin
   if not me.active then raise exception 'Hesabın pasif durumda. Lütfen destek ile iletişime geçin.' using errcode = 'P0001'; end if;
   return me;
 end $$;
-
-create or replace function public._fail(msg text) returns void
-language plpgsql as $$ begin raise exception '%', msg using errcode = 'P0001'; end $$;
 
 create or replace function public._require_admin() returns public.profiles
 language plpgsql stable security definer set search_path = public as $$
@@ -193,13 +276,18 @@ language sql security definer set search_path = public as $$
   select p_user, p_title, p_body, p_order where p_user is not null
 $$;
 
+create or replace function public._notify_admins(p_title text, p_body text, p_order uuid default null) returns void
+language sql security definer set search_path = public as $$
+  insert into notifications(user_id, title, body, order_id)
+  select id, p_title, p_body, p_order from profiles where role = 'admin' and active
+$$;
+
 create or replace function public._status_label(s text) returns text
 language sql immutable as $$
   select case s
     when 'seller_pending' then 'Satıcı Onayı Bekliyor'
-    when 'approved' then 'Onaylandı'
-    when 'payment_pending' then 'Ödeme Admin Onayı Bekliyor'
-    when 'paid' then 'Ödeme Onaylandı'
+    when 'approved' then 'Ödeme Bekleniyor'
+    when 'paid' then 'Ödendi · Hazırlanıyor'
     when 'completed' then 'Tamamlandı'
     when 'rejected' then 'Reddedildi'
     when 'cancelled' then 'İptal Edildi'
@@ -233,15 +321,25 @@ language plpgsql security definer set search_path = public as $$
 declare
   meta jsonb := coalesce(new.raw_user_meta_data, '{}'::jsonb);
   v_name text := coalesce(nullif(btrim(meta->>'name'), ''), split_part(new.email, '@', 1));
+  v_province text := meta->>'province';
   v_district text := meta->>'district';
   v_neighborhood text := coalesce(nullif(btrim(meta->>'neighborhood'), ''), 'Merkez');
+  v_intent text := coalesce(meta->>'intent', 'buyer');
 begin
-  if v_district is null or not (v_district = any (hatay_districts())) then v_district := 'Antakya'; end if;
+  -- Geçersiz konum kaydı engellemesin diye güvenli varsayılan; kullanıcı profilinden düzeltebilir.
+  if not _valid_location(v_province, v_district) then v_province := 'Ankara'; v_district := 'Çankaya'; end if;
   if char_length(v_name) < 3 then v_name := rpad(v_name, 3, '.'); end if;
-  insert into profiles(id, name, district, neighborhood) values (new.id, left(v_name, 80), v_district, left(v_neighborhood, 60));
-  insert into profile_private(id, email, accepted_terms_at)
-  values (new.id, coalesce(new.email, ''), case when (meta->>'accepted_terms')::boolean then now() end);
-  perform _notify(new.id, 'LezzetHub’a hoş geldin! 🧡', 'Profilini tamamla, ilk ilanını ver ya da komşularının lezzetlerini keşfet.');
+  insert into profiles(id, name, province, district, neighborhood)
+  values (new.id, left(v_name, 80), v_province, v_district, left(v_neighborhood, 80));
+  insert into profile_private(id, email, accepted_terms_at, kvkk_consent_at)
+  values (new.id, coalesce(new.email, ''),
+          case when (meta->>'accepted_terms')::boolean then now() end,
+          case when (meta->>'kvkk_consent')::boolean then now() end);
+  perform _notify(new.id, 'LezzetHub’a hoş geldin! 🧡',
+    case v_intent
+      when 'seller' then 'Satış yapmak için hijyen belgeni yükleyerek satıcı başvurunu tamamla.'
+      when 'courier' then 'Kurye olarak görünmek için ehliyet bilgilerini yükleyerek başvurunu tamamla.'
+      else 'Profilini tamamla ve komşularının lezzetlerini keşfet.' end);
   return new;
 end $$;
 
@@ -250,37 +348,154 @@ create trigger on_auth_user_created after insert on auth.users
   for each row execute function public.handle_new_user();
 
 -- ---------------------------------------------------------------------
--- Profil
+-- Profil ve hesap
 -- ---------------------------------------------------------------------
 
 create or replace function public.update_profile(
-  p_name text, p_bio text, p_district text, p_neighborhood text,
-  p_address text, p_availability text, p_avatar_url text
+  p_name text, p_bio text, p_province text, p_district text, p_neighborhood text,
+  p_address text, p_phone text, p_availability text, p_avatar_url text
 ) returns void language plpgsql security definer set search_path = public as $$
-declare me profiles := _me();
+declare
+  me profiles := _me();
+  v_phone text := '';
 begin
   if char_length(btrim(p_name)) < 3 then perform _fail('Lütfen ad soyad girin.'); end if;
-  if not (p_district = any (hatay_districts())) then perform _fail('Lütfen Hatay ilçelerinden birini seçin.'); end if;
+  if not _valid_location(p_province, p_district) then perform _fail('Lütfen geçerli bir il ve ilçe seçin.'); end if;
   if btrim(coalesce(p_neighborhood, '')) = '' then perform _fail('Mahalle zorunludur.'); end if;
+  if btrim(coalesce(p_phone, '')) <> '' then
+    v_phone := _normalize_phone(p_phone);
+    if v_phone is null then perform _fail('Telefon numarasını 05XX XXX XX XX biçiminde girin.'); end if;
+  end if;
   update profiles set
-    name = btrim(p_name), bio = btrim(coalesce(p_bio, '')), district = p_district,
+    name = btrim(p_name), bio = btrim(coalesce(p_bio, '')), province = p_province, district = p_district,
     neighborhood = btrim(p_neighborhood), availability = btrim(coalesce(p_availability, '')),
     avatar_url = nullif(p_avatar_url, '')
   where id = me.id;
-  update profile_private set address = btrim(coalesce(p_address, '')) where id = me.id;
-  -- İlanlar satıcının konumunu miras alır.
-  update listings set district = p_district, neighborhood = btrim(p_neighborhood) where owner_id = me.id;
+  update profile_private set address = btrim(coalesce(p_address, '')), phone = v_phone where id = me.id;
+  update listings set province = p_province, district = p_district, neighborhood = btrim(p_neighborhood) where owner_id = me.id;
 end $$;
 
 create or replace function public.delete_my_account() returns void
 language plpgsql security definer set search_path = public, auth as $$
 declare me profiles := _me();
 begin
-  if exists (select 1 from orders where (buyer_id = me.id or seller_id = me.id)
-             and status in ('seller_pending','approved','payment_pending','paid')) then
+  if exists (select 1 from orders where (buyer_id = me.id or seller_id = me.id) and status in ('seller_pending','approved','paid')) then
     perform _fail('Devam eden siparişlerin var. Hesabını silmeden önce siparişlerini tamamla veya iptal et.');
   end if;
-  delete from auth.users where id = me.id; -- profil ve bağlı veriler cascade ile silinir
+  delete from auth.users where id = me.id;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Satıcı ve kurye başvuruları
+-- ---------------------------------------------------------------------
+
+create or replace function public.submit_seller_application(
+  p_doc_path text, p_doc_type text, p_barcode text, p_iban text, p_iban_holder text,
+  p_accept_declaration boolean, p_accept_consent boolean
+) returns void language plpgsql security definer set search_path = public as $$
+declare
+  me profiles := _me();
+  v_iban text := _normalize_iban(p_iban);
+begin
+  if me.seller_status = 'approved' then perform _fail('Satıcı hesabın zaten onaylı.'); end if;
+  if coalesce(p_doc_path, '') = '' or split_part(p_doc_path, '/', 1) <> me.id::text then perform _fail('E-Devlet onaylı hijyen belgeni yüklemelisin.'); end if;
+  if p_doc_type not in ('image','pdf') then perform _fail('Belge fotoğraf veya PDF olmalıdır.'); end if;
+  if char_length(regexp_replace(coalesce(p_barcode, ''), '\s', '', 'g')) < 8 then perform _fail('Belgenin e-Devlet doğrulama (barkod) numarasını girin.'); end if;
+  if v_iban is null then perform _fail('Geçerli bir TR IBAN girin (TR ile başlayan 26 karakter).'); end if;
+  if char_length(btrim(coalesce(p_iban_holder, ''))) < 3 then perform _fail('IBAN sahibinin adını soyadını girin.'); end if;
+  if not coalesce(p_accept_declaration, false) then perform _fail('Satış yapabilmek için mevzuat ve sorumluluk beyanını onaylamalısın.'); end if;
+  if not coalesce(p_accept_consent, false) then perform _fail('Belgelerinin işlenmesine ilişkin açık rızayı onaylamalısın.'); end if;
+  delete from verifications where user_id = me.id and kind = 'seller';
+  insert into verifications(user_id, kind, doc_path, doc_type, doc_number, iban, iban_holder, declaration_at, document_consent_at)
+  values (me.id, 'seller', p_doc_path, p_doc_type, btrim(p_barcode), v_iban, btrim(p_iban_holder), now(), now());
+  update profiles set seller_status = 'pending' where id = me.id;
+  perform _notify_admins('Yeni satıcı başvurusu 📄', me.name || ' hijyen belgesini yükledi; onay bekliyor.');
+end $$;
+
+create or replace function public.submit_courier_application(
+  p_license_class text, p_license_number text, p_doc_path text, p_doc_type text, p_phone text,
+  p_service_province text, p_service_districts text[], p_accept_consent boolean, p_accept_declaration boolean
+) returns void language plpgsql security definer set search_path = public as $$
+declare
+  me profiles := _me();
+  v_phone text := _normalize_phone(p_phone);
+  d text;
+begin
+  if me.courier_status = 'approved' then perform _fail('Kurye hesabın zaten onaylı.'); end if;
+  if coalesce(p_license_class, '') not in ('A2','B') then perform _fail('Kurye olabilmek için A2 veya B sınıfı ehliyet gereklidir.'); end if;
+  if char_length(regexp_replace(coalesce(p_license_number, ''), '\s', '', 'g')) < 5 then perform _fail('Ehliyet belge numaranı girin.'); end if;
+  if coalesce(p_doc_path, '') = '' or split_part(p_doc_path, '/', 1) <> me.id::text then perform _fail('Ehliyetinin fotoğrafını yüklemelisin.'); end if;
+  if p_doc_type not in ('image','pdf') then perform _fail('Belge fotoğraf veya PDF olmalıdır.'); end if;
+  if v_phone is null then perform _fail('Telefon numarasını 05XX XXX XX XX biçiminde girin.'); end if;
+  if coalesce(cardinality(p_service_districts), 0) = 0 then perform _fail('Hizmet vereceğin en az bir ilçe seçin.'); end if;
+  foreach d in array p_service_districts loop
+    if not _valid_location(p_service_province, d) then perform _fail('Seçilen ilçeler hizmet iline ait olmalı.'); end if;
+  end loop;
+  if not coalesce(p_accept_consent, false) then perform _fail('Belgelerinin işlenmesine ve telefonunun paylaşılmasına ilişkin açık rızayı onaylamalısın.'); end if;
+  if not coalesce(p_accept_declaration, false) then perform _fail('Kurye sorumluluk beyanını onaylamalısın.'); end if;
+  delete from verifications where user_id = me.id and kind = 'courier';
+  insert into verifications(user_id, kind, doc_path, doc_type, doc_number, license_class, declaration_at, document_consent_at)
+  values (me.id, 'courier', p_doc_path, p_doc_type, btrim(p_license_number), p_license_class, now(), now());
+  insert into courier_profiles(user_id, license_class, vehicle, phone, service_province, service_districts, available, updated_at)
+  values (me.id, p_license_class, case when p_license_class = 'A2' then 'motorcycle' else 'car' end, v_phone,
+          p_service_province, (select array_agg(distinct x) from unnest(p_service_districts) x), true, now())
+  on conflict (user_id) do update set license_class = excluded.license_class, vehicle = excluded.vehicle, phone = excluded.phone,
+    service_province = excluded.service_province, service_districts = excluded.service_districts, updated_at = now();
+  update profiles set courier_status = 'pending' where id = me.id;
+  update profile_private set phone = v_phone where id = me.id and phone = '';
+  perform _notify_admins('Yeni kurye başvurusu 🛵', me.name || ' ' || p_license_class || ' sınıfı ehliyetini yükledi; onay bekliyor.');
+end $$;
+
+create or replace function public.update_courier_profile(p_available boolean, p_service_districts text[], p_phone text)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  me profiles := _me();
+  c courier_profiles;
+  d text;
+  v_phone text;
+begin
+  select * into c from courier_profiles where user_id = me.id;
+  if c.user_id is null then perform _fail('Kurye profilin bulunamadı.'); end if;
+  if p_service_districts is not null then
+    if cardinality(p_service_districts) = 0 then perform _fail('En az bir ilçe seçin.'); end if;
+    foreach d in array p_service_districts loop
+      if not _valid_location(c.service_province, d) then perform _fail('Seçilen ilçeler hizmet iline ait olmalı.'); end if;
+    end loop;
+  end if;
+  if p_phone is not null then
+    v_phone := _normalize_phone(p_phone);
+    if v_phone is null then perform _fail('Telefon numarasını 05XX XXX XX XX biçiminde girin.'); end if;
+  end if;
+  update courier_profiles set
+    available = coalesce(p_available, available),
+    service_districts = coalesce((select array_agg(distinct x) from unnest(p_service_districts) x), service_districts),
+    phone = coalesce(v_phone, phone),
+    updated_at = now()
+  where user_id = me.id;
+end $$;
+
+create or replace function public.review_verification(p_id uuid, p_approve boolean, p_note text)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  me profiles := _require_admin();
+  v verifications;
+  v_status text := case when p_approve then 'approved' else 'rejected' end;
+  v_what text;
+begin
+  select * into v from verifications where id = p_id for update;
+  if v.id is null then perform _fail('Başvuru bulunamadı.'); end if;
+  if v.status <> 'pending' then perform _fail('Bu başvuru zaten sonuçlandırıldı.'); end if;
+  if not p_approve and btrim(coalesce(p_note, '')) = '' then perform _fail('Reddetme gerekçesini yazmalısın; kullanıcıya iletilecek.'); end if;
+  update verifications set status = v_status, admin_note = nullif(btrim(coalesce(p_note, '')), ''), reviewed_at = now(), reviewed_by = me.id where id = p_id;
+  if v.kind = 'seller' then update profiles set seller_status = v_status where id = v.user_id;
+  else update profiles set courier_status = v_status where id = v.user_id; end if;
+  v_what := case when v.kind = 'seller' then 'Satıcı' else 'Kurye' end;
+  if p_approve then
+    perform _notify(v.user_id, v_what || ' başvurun onaylandı ✅',
+      case when v.kind = 'seller' then 'Artık ilan verip satış yapabilirsin.' else 'Artık yakınındaki satıcı ve alıcılar seni kurye listesinde görebilir.' end);
+  else
+    perform _notify(v.user_id, v_what || ' başvurun reddedildi', 'Gerekçe: ' || btrim(p_note) || '. Belgeni düzeltip yeniden başvurabilirsin.');
+  end if;
 end $$;
 
 -- ---------------------------------------------------------------------
@@ -289,22 +504,24 @@ end $$;
 
 create or replace function public.save_listing(
   p_id uuid, p_title text, p_description text, p_price numeric, p_category text,
-  p_images text[], p_prep_time text, p_delivery text[], p_status text
+  p_images text[], p_prep_time text, p_delivery text[], p_shipping_payer text, p_status text
 ) returns public.listings language plpgsql security definer set search_path = public as $$
 declare
   me profiles := _me();
   l listings;
 begin
+  if me.seller_status <> 'approved' then perform _fail('İlan verebilmek için satıcı başvurunun (hijyen belgesi) onaylanması gerekir.'); end if;
   if char_length(btrim(p_title)) < 3 then perform _fail('Başlık en az 3 karakter olmalıdır.'); end if;
   if char_length(btrim(p_description)) < 10 then perform _fail('Açıklama en az 10 karakter olmalıdır.'); end if;
   if p_price is null or p_price <= 0 then perform _fail('Geçerli bir fiyat girin.'); end if;
   if coalesce(cardinality(p_delivery), 0) = 0 then perform _fail('En az bir teslimat seçeneği seçmelisiniz.'); end if;
+  if coalesce(p_shipping_payer, '') not in ('buyer','seller') then perform _fail('Kargo/kurye ücretinin kime ait olduğunu seçin.'); end if;
   if coalesce(cardinality(p_images), 0) > 6 then perform _fail('En fazla 6 fotoğraf ekleyebilirsin.'); end if;
 
   if p_id is null then
-    insert into listings(owner_id, title, description, price, category, images, prep_time, delivery, status, district, neighborhood)
+    insert into listings(owner_id, title, description, price, category, images, prep_time, delivery, shipping_payer, status, province, district, neighborhood)
     values (me.id, btrim(p_title), btrim(p_description), round(p_price, 2), p_category, coalesce(p_images, '{}'),
-            btrim(coalesce(p_prep_time, '')), p_delivery, p_status, me.district, me.neighborhood)
+            btrim(coalesce(p_prep_time, '')), p_delivery, p_shipping_payer, p_status, me.province, me.district, me.neighborhood)
     returning * into l;
   else
     select * into l from listings where id = p_id for update;
@@ -314,7 +531,7 @@ begin
     update listings set
       title = btrim(p_title), description = btrim(p_description), price = round(p_price, 2), category = p_category,
       images = coalesce(p_images, '{}'), prep_time = btrim(coalesce(p_prep_time, '')), delivery = p_delivery,
-      status = p_status, updated_at = now()
+      shipping_payer = p_shipping_payer, status = p_status, updated_at = now()
     where id = p_id returning * into l;
   end if;
   return l;
@@ -336,6 +553,7 @@ begin
   else
     if l.owner_id <> me.id then perform _fail('Bu ilan üzerinde yetkiniz yok.'); end if;
     if l.removed_by_admin and p_status = 'active' then perform _fail('Bu ilan yönetici tarafından yayından kaldırıldı.'); end if;
+    if p_status = 'active' and me.seller_status <> 'approved' then perform _fail('İlanı yayına almak için satıcı başvurunun onaylı olması gerekir.'); end if;
     update listings set status = p_status, updated_at = now() where id = p_id;
   end if;
 end $$;
@@ -349,7 +567,7 @@ begin
   select * into l from listings where id = p_id;
   if l.id is null then perform _fail('İlan bulunamadı.'); end if;
   if me.role <> 'admin' and l.owner_id <> me.id then perform _fail('Bu ilanı silme yetkiniz yok.'); end if;
-  if exists (select 1 from orders where listing_id = p_id and status in ('seller_pending','approved','payment_pending','paid')) then
+  if exists (select 1 from orders where listing_id = p_id and status in ('seller_pending','approved','paid')) then
     perform _fail('Bu ilana ait devam eden siparişler var. Önce siparişleri sonuçlandırın veya ilanı pasifleştirin.');
   end if;
   delete from listings where id = p_id;
@@ -377,13 +595,15 @@ begin
   select * into l from listings where id = p_listing_id;
   if l.id is null then perform _fail('İlan bulunamadı.'); end if;
   select * into seller from profiles where id = l.owner_id;
-  if l.status <> 'active' or not seller.active then perform _fail('Bu ilan şu anda yayında değil.'); end if;
+  if l.status <> 'active' or not seller.active or seller.seller_status <> 'approved' then perform _fail('Bu ilan şu anda yayında değil.'); end if;
   if l.owner_id = me.id then perform _fail('Kendi ilanınıza sipariş veremezsiniz.'); end if;
   if _is_blocked_between(me.id, l.owner_id) then perform _fail('Bu satıcıyla işlem yapamazsınız.'); end if;
   if p_quantity is null or p_quantity < 1 or p_quantity > 50 then perform _fail('Adet 1 ile 50 arasında olmalıdır.'); end if;
   if not (p_delivery = any (l.delivery)) then perform _fail('Bu ilan seçilen teslimat yöntemini desteklemiyor.'); end if;
   if p_appointment < now() then perform _fail('Randevu zamanı geçmiş bir zaman olamaz.'); end if;
-  if p_delivery = 'courier' and char_length(btrim(coalesce(p_address, ''))) < 5 then perform _fail('Kurye teslimatı için adres girin.'); end if;
+  if p_delivery <> 'pickup' and char_length(btrim(coalesce(p_address, ''))) < 10 then
+    perform _fail(case when p_delivery = 'cargo' then 'Kargo için açık adresini (mahalle, sokak, no, ilçe/il) girin.' else 'Kurye teslimatı için adres girin.' end);
+  end if;
 
   v_sub := round(l.price * p_quantity, 2);
   v_bfee := round(v_sub * buyer_fee_rate(), 2);
@@ -393,52 +613,44 @@ begin
     exit when not exists (select 1 from orders where code = v_code);
   end loop;
 
-  insert into orders(code, buyer_id, seller_id, listing_id, listing_title, unit_price, quantity, appointment, delivery,
+  insert into orders(code, buyer_id, seller_id, listing_id, listing_title, unit_price, quantity, appointment, delivery, shipping_payer,
                      address, note, subtotal, buyer_fee, seller_fee, buyer_total, seller_net, history)
-  values (v_code, me.id, l.owner_id, l.id, l.title, l.price, p_quantity, p_appointment, p_delivery,
-          case when p_delivery = 'courier' then btrim(p_address) else '' end, btrim(coalesce(p_note, '')),
+  values (v_code, me.id, l.owner_id, l.id, l.title, l.price, p_quantity, p_appointment, p_delivery, l.shipping_payer,
+          case when p_delivery = 'pickup' then '' else btrim(p_address) end, btrim(coalesce(p_note, '')),
           v_sub, v_bfee, v_sfee, v_sub + v_bfee, v_sub - v_sfee,
           jsonb_build_array(jsonb_build_object('status', 'seller_pending', 'at', now(), 'by', me.id)))
   returning * into o;
 
-  -- Sipariş açılınca otomatik ilk mesaj (metni istemci randevuyu yerel saatle biçimlendirerek gönderir).
   insert into messages(order_id, sender_id, receiver_id, text)
   values (o.id, me.id, l.owner_id, left(coalesce(nullif(btrim(p_first_message), ''), 'Merhaba! Yeni bir sipariş oluşturdum.'), 1000));
-  perform _notify(l.owner_id, 'Yeni sipariş talebi 🛎',
-    me.name || ', “' || l.title || '” için ' || p_quantity || ' adet sipariş verdi.', o.id);
+  perform _notify(l.owner_id, 'Yeni sipariş talebi 🛎', me.name || ', “' || l.title || '” için ' || p_quantity || ' adet sipariş verdi.', o.id);
   return o;
 end $$;
 
+-- api.availableActions ile aynı kurallar. Ödeme ve iade ayrı akışlardır (ödeme fonksiyonları).
 create or replace function public.order_action(p_order_id uuid, p_action text, p_note text default null) returns void
 language plpgsql security definer set search_path = public as $$
 declare
   me profiles := _me();
   o orders;
-  is_buyer boolean; is_seller boolean; is_adm boolean;
+  is_buyer boolean; is_seller boolean;
   allowed text[] := '{}';
   v_title text;
   v_note text := nullif(btrim(coalesce(p_note, '')), '');
-  a record;
 begin
   select * into o from orders where id = p_order_id for update;
   if o.id is null then perform _fail('Sipariş bulunamadı.'); end if;
   is_buyer := o.buyer_id = me.id;
   is_seller := o.seller_id = me.id;
-  is_adm := me.role = 'admin';
 
-  -- api.availableActions ile aynı kurallar
   case o.status
     when 'seller_pending' then
       if is_seller then allowed := allowed || array['approve','reject']; end if;
       if is_buyer then allowed := allowed || array['cancel']; end if;
     when 'approved' then
-      if is_buyer then allowed := allowed || array['pay','cancel']; end if;
-      if is_seller then allowed := allowed || array['cancel']; end if;
-    when 'payment_pending' then
-      if is_adm then allowed := allowed || array['paymentApprove','paymentReject']; end if;
+      if is_buyer or is_seller then allowed := allowed || array['cancel']; end if;
     when 'paid' then
       if is_buyer or is_seller then allowed := allowed || array['complete']; end if;
-      if is_adm then allowed := allowed || array['cancel']; end if;
     else null;
   end case;
   if not (p_action = any (allowed)) then perform _fail('Bu işlem şu anda yapılamaz.'); end if;
@@ -448,49 +660,141 @@ begin
   if p_action = 'approve' then
     if o.delivery = 'pickup' then
       update orders set pickup_address = coalesce(
-        (select nullif(address, '') from profile_private where id = me.id), me.neighborhood || ', ' || me.district)
+        (select nullif(address, '') from profile_private where id = me.id), me.neighborhood || ', ' || me.district || '/' || me.province)
       where id = o.id;
     end if;
     perform _transition(o, 'approved', me.id);
-    perform _notify(o.buyer_id, 'Siparişin onaylandı ✅', v_title || ' satıcı tarafından onaylandı. Ödeme adımına geçebilirsin.', o.id);
-
+    perform _notify(o.buyer_id, 'Siparişin onaylandı ✅', v_title || ' satıcı tarafından onaylandı. Online ödemeyi yaparak siparişini kesinleştir.', o.id);
   elsif p_action = 'reject' then
     perform _transition(o, 'rejected', me.id, coalesce(v_note, 'Satıcı siparişi reddetti'));
     perform _notify(o.buyer_id, 'Sipariş reddedildi', v_title || ' satıcı tarafından reddedildi.', o.id);
-
   elsif p_action = 'cancel' then
     perform _transition(o, 'cancelled', me.id, coalesce(v_note, 'Sipariş iptal edildi'));
     if o.buyer_id is distinct from me.id then perform _notify(o.buyer_id, 'Sipariş iptal edildi', v_title || ' iptal edildi.', o.id); end if;
     if o.seller_id is distinct from me.id then perform _notify(o.seller_id, 'Sipariş iptal edildi', v_title || ' iptal edildi.', o.id); end if;
-    update payments set status = 'rejected' where order_id = o.id and status = 'pending';
-
-  elsif p_action = 'pay' then
-    perform _transition(o, 'payment_pending', me.id);
-    insert into payments(order_id, amount) values (o.id, o.buyer_total);
-    perform _notify(o.seller_id, 'Ödeme başlatıldı 💳', v_title || ' için alıcı ödemeyi başlattı, admin onayı bekleniyor.', o.id);
-    for a in select id from profiles where role = 'admin' and active loop
-      perform _notify(a.id, 'Onay bekleyen ödeme', v_title || ' — ' || _tl(o.buyer_total), o.id);
-    end loop;
-
-  elsif p_action in ('paymentApprove', 'paymentReject') then
-    update payments set status = case when p_action = 'paymentApprove' then 'approved' else 'rejected' end,
-      admin_id = me.id, admin_note = v_note, decided_at = now()
-    where order_id = o.id and status = 'pending';
-    if p_action = 'paymentApprove' then
-      perform _transition(o, 'paid', me.id);
-      perform _notify(o.buyer_id, 'Ödemen onaylandı 🎉', v_title || ' için ödemen onaylandı. Randevu zamanında teslimat yapılacak.', o.id);
-      perform _notify(o.seller_id, 'Ödeme onaylandı 🎉', v_title || ' için ödeme onaylandı. Hazırlığa başlayabilirsin.', o.id);
-    else
-      perform _transition(o, 'rejected', me.id, coalesce(v_note, 'Ödeme admin tarafından reddedildi'));
-      perform _notify(o.buyer_id, 'Ödeme reddedildi', v_title || ' için ödeme reddedildi.', o.id);
-      perform _notify(o.seller_id, 'Ödeme reddedildi', v_title || ' için ödeme reddedildi.', o.id);
-    end if;
-
+    update payments set status = 'failed', error_message = 'Sipariş iptal edildi' where order_id = o.id and status = 'pending';
   elsif p_action = 'complete' then
     perform _transition(o, 'completed', me.id);
     perform _notify(case when is_buyer then o.seller_id else o.buyer_id end,
       'Sipariş tamamlandı 🧡', v_title || ' tamamlandı olarak işaretlendi. Afiyet olsun!', o.id);
   end if;
+end $$;
+
+create or replace function public.set_shipment(p_order_id uuid, p_company text, p_tracking text) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  me profiles := _me();
+  o orders;
+begin
+  select * into o from orders where id = p_order_id for update;
+  if o.id is null then perform _fail('Sipariş bulunamadı.'); end if;
+  if o.seller_id is distinct from me.id then perform _fail('Kargo bilgisini yalnızca satıcı girebilir.'); end if;
+  if o.delivery <> 'cargo' then perform _fail('Bu sipariş kargo ile gönderilmiyor.'); end if;
+  if o.status <> 'paid' then perform _fail('Kargo bilgisi ödeme alındıktan sonra girilebilir.'); end if;
+  if char_length(btrim(coalesce(p_company, ''))) < 2 or char_length(btrim(coalesce(p_tracking, ''))) < 4 then
+    perform _fail('Kargo firmasını ve takip numarasını girin.');
+  end if;
+  update orders set shipping_company = btrim(p_company), tracking_code = btrim(p_tracking), updated_at = now() where id = o.id;
+  insert into messages(order_id, is_system, text, read)
+  values (o.id, true, 'Kargoya verildi: ' || btrim(p_company) || ' · Takip no: ' || btrim(p_tracking), true);
+  perform _notify(o.buyer_id, 'Siparişin kargoya verildi 📦', o.listing_title || ' — ' || btrim(p_company) || ', takip no: ' || btrim(p_tracking), o.id);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Online ödeme (YALNIZCA sunucu fonksiyonları / service_role çağırır)
+-- ---------------------------------------------------------------------
+
+-- Ödeme başlatılabilir mi? Siparişi ve alıcı bilgilerini döner.
+create or replace function public.payment_prepare(p_order_id uuid, p_user uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  o orders; b profiles; bp profile_private;
+begin
+  select * into o from orders where id = p_order_id;
+  if o.id is null then perform _fail('Sipariş bulunamadı.'); end if;
+  if o.buyer_id is distinct from p_user then perform _fail('Bu siparişin ödemesini yalnızca alıcı yapabilir.'); end if;
+  if o.status <> 'approved' then perform _fail('Bu sipariş için şu anda ödeme yapılamaz.'); end if;
+  select * into b from profiles where id = p_user;
+  if not b.active then perform _fail('Hesabın pasif durumda.'); end if;
+  select * into bp from profile_private where id = p_user;
+  -- Yarım kalan eski ödeme denemelerini kapat.
+  update payments set status = 'failed', error_message = 'Yeni ödeme denemesi başlatıldı' where order_id = o.id and status = 'pending';
+  return jsonb_build_object('order', to_jsonb(o), 'buyer', to_jsonb(b), 'buyerPrivate', to_jsonb(bp));
+end $$;
+
+create or replace function public.payment_record_pending(p_order_id uuid, p_token text, p_amount numeric) returns void
+language sql security definer set search_path = public as $$
+  insert into payments(order_id, amount, provider, status, provider_token) values (p_order_id, p_amount, 'iyzico', 'pending', p_token);
+$$;
+
+-- iyzico sonucu doğrulandıktan sonra çağrılır. Tutar sipariş toplamıyla eşleşmelidir; eşleşmezse ödeme
+-- başarısız sayılır, adminler uyarılır ve null döner (kayıt geri alınmasın diye hata fırlatılmaz).
+-- Tekrar çağrılırsa sonuç değişmez.
+create or replace function public.payment_confirm(
+  p_token text, p_payment_id text, p_transaction_id text, p_paid_price numeric, p_last4 text, p_association text
+) returns uuid language plpgsql security definer set search_path = public as $$
+declare
+  p payments; o orders; v_title text;
+begin
+  select * into p from payments where provider_token = p_token for update;
+  if p.id is null then perform _fail('Ödeme kaydı bulunamadı.'); end if;
+  if p.status = 'succeeded' then return p.order_id; end if;
+  select * into o from orders where id = p.order_id for update;
+  if round(p_paid_price, 2) <> o.buyer_total then
+    update payments set status = 'failed', error_message = 'Tutar uyuşmazlığı' where id = p.id;
+    perform _notify_admins('Ödeme tutarı uyuşmuyor ⚠️', o.code || ' için beklenen ' || _tl(o.buyer_total) || ', gelen ' || _tl(p_paid_price) || '. İade edin.', o.id);
+    return null;
+  end if;
+  update payments set status = 'succeeded', provider_payment_id = p_payment_id, provider_transaction_id = p_transaction_id,
+    card_last4 = p_last4, card_association = p_association, paid_at = now()
+  where id = p.id;
+  if o.status = 'approved' then
+    perform _transition(o, 'paid', o.buyer_id);
+    v_title := '“' || o.listing_title || '” (' || o.code || ')';
+    perform _notify(o.buyer_id, 'Ödemen alındı 🎉', v_title || ' için ' || _tl(o.buyer_total) || ' ödemen alındı. Satıcı hazırlığa başlıyor.', o.id);
+    perform _notify(o.seller_id, 'Ödeme alındı 🎉', v_title || ' için ödeme alındı. Randevu saatine göre hazırlığa başlayabilirsin.', o.id);
+  else
+    -- Sipariş bu arada iptal edildiyse ödeme iade edilmelidir.
+    perform _notify_admins('İade gerekiyor ⚠️', o.code || ' iptal edilmişken ödeme alındı; iade edin.', o.id);
+  end if;
+  return o.id;
+end $$;
+
+create or replace function public.payment_fail(p_token text, p_error text) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare p payments;
+begin
+  update payments set status = 'failed', error_message = left(coalesce(p_error, 'Ödeme başarısız'), 300)
+  where provider_token = p_token and status = 'pending' returning * into p;
+  return p.order_id;
+end $$;
+
+-- İade öncesi kontrol: admin mi, iade edilecek başarılı ödeme var mı?
+create or replace function public.payment_for_refund(p_order_id uuid, p_admin uuid) returns public.payments
+language plpgsql security definer set search_path = public as $$
+declare p payments; o orders;
+begin
+  if not exists (select 1 from profiles where id = p_admin and role = 'admin' and active) then perform _fail('Bu işlem için yönetici yetkisi gerekiyor.'); end if;
+  select * into o from orders where id = p_order_id;
+  if o.id is null then perform _fail('Sipariş bulunamadı.'); end if;
+  if o.status <> 'paid' then perform _fail('Yalnızca ödenmiş ve tamamlanmamış siparişler iade edilebilir.'); end if;
+  select * into p from payments where order_id = p_order_id and status = 'succeeded' order by paid_at desc limit 1;
+  if p.id is null then perform _fail('İade edilecek başarılı ödeme bulunamadı.'); end if;
+  return p;
+end $$;
+
+create or replace function public.payment_mark_refunded(p_payment_id uuid, p_admin uuid, p_note text) returns void
+language plpgsql security definer set search_path = public as $$
+declare p payments; o orders; v_title text;
+begin
+  select * into p from payments where id = p_payment_id for update;
+  if p.id is null or p.status <> 'succeeded' then perform _fail('İade edilecek başarılı ödeme bulunamadı.'); end if;
+  update payments set status = 'refunded', refunded_at = now(), refund_note = coalesce(nullif(btrim(p_note), ''), 'Yönetici tarafından iade edildi') where id = p.id;
+  select * into o from orders where id = p.order_id for update;
+  perform _transition(o, 'cancelled', p_admin, 'İade edildi' || coalesce(' — ' || nullif(btrim(p_note), ''), ''));
+  v_title := '“' || o.listing_title || '” (' || o.code || ')';
+  perform _notify(o.buyer_id, 'Ödemen iade edildi', v_title || ' iptal edildi ve ' || _tl(p.amount) || ' kartına iade edildi.', o.id);
+  perform _notify(o.seller_id, 'Sipariş iptal ve iade edildi', v_title || ' yönetici tarafından iptal edilip iade edildi.', o.id);
 end $$;
 
 -- ---------------------------------------------------------------------
@@ -520,8 +824,7 @@ end $$;
 create or replace function public.mark_chat_read(p_order_id uuid) returns void
 language sql security definer set search_path = public as $$
   update messages set read = true where order_id = p_order_id and receiver_id = auth.uid() and not read;
-  update notifications set read = true
-  where user_id = auth.uid() and order_id = p_order_id and title like '💬%' and not read;
+  update notifications set read = true where user_id = auth.uid() and order_id = p_order_id and title like '💬%' and not read;
 $$;
 
 create or replace function public.mark_notifications_read() returns void
@@ -530,14 +833,12 @@ language sql security definer set search_path = public as $$
 $$;
 
 -- ---------------------------------------------------------------------
--- Şikayet ve engelleme (App Store kullanıcı içeriği kuralı)
+-- Şikayet ve engelleme
 -- ---------------------------------------------------------------------
 
 create or replace function public.report_content(p_target_type text, p_target_id uuid, p_reason text, p_note text) returns void
 language plpgsql security definer set search_path = public as $$
-declare
-  me profiles := _me();
-  a record;
+declare me profiles := _me();
 begin
   if p_target_type = 'listing' and not exists (select 1 from listings where id = p_target_id) then perform _fail('Şikayet edilen içerik bulunamadı.'); end if;
   if p_target_type = 'user' and not exists (select 1 from profiles where id = p_target_id) then perform _fail('Şikayet edilen içerik bulunamadı.'); end if;
@@ -547,9 +848,7 @@ begin
   end if;
   insert into reports(reporter_id, target_type, target_id, reason, note)
   values (me.id, p_target_type, p_target_id, p_reason, left(btrim(coalesce(p_note, '')), 500));
-  for a in select id from profiles where role = 'admin' and active loop
-    perform _notify(a.id, 'Yeni şikayet 🚩', case when p_target_type = 'listing' then 'Bir ilan şikayet edildi.' else 'Bir kullanıcı şikayet edildi.' end);
-  end loop;
+  perform _notify_admins('Yeni şikayet 🚩', case when p_target_type = 'listing' then 'Bir ilan şikayet edildi.' else 'Bir kullanıcı şikayet edildi.' end);
 end $$;
 
 create or replace function public.block_user(p_user_id uuid) returns void
@@ -601,19 +900,34 @@ language plpgsql security definer set search_path = public, auth as $$
 declare me profiles := _require_admin();
 begin
   if p_user_id = me.id then perform _fail('Kendi hesabınızı silemezsiniz.'); end if;
-  if exists (select 1 from orders where (buyer_id = p_user_id or seller_id = p_user_id)
-             and status in ('seller_pending','approved','payment_pending','paid')) then
+  if exists (select 1 from orders where (buyer_id = p_user_id or seller_id = p_user_id) and status in ('seller_pending','approved','paid')) then
     perform _fail('Kullanıcının devam eden siparişleri var. Önce siparişleri sonuçlandırın veya kullanıcıyı pasifleştirin.');
   end if;
   delete from auth.users where id = p_user_id;
+end $$;
+
+-- Tamamlanan siparişlerin net tutarının satıcının IBAN'ına aktarıldığını işaretler.
+create or replace function public.admin_mark_payout(p_order_ids uuid[]) returns void
+language plpgsql security definer set search_path = public as $$
+declare me profiles := _require_admin(); o orders;
+begin
+  for o in select * from orders where id = any (p_order_ids) for update loop
+    if o.status <> 'completed' then perform _fail('Yalnızca tamamlanan siparişler için satıcıya ödeme yapılır.'); end if;
+    if o.payout_status = 'paid' then continue; end if;
+    update orders set payout_status = 'paid', payout_at = now() where id = o.id;
+    perform _notify(o.seller_id, 'Kazancın hesabına gönderildi 💸', '“' || o.listing_title || '” (' || o.code || ') için ' || _tl(o.seller_net) || ' IBAN’ına aktarıldı.', o.id);
+  end loop;
 end $$;
 
 -- ---------------------------------------------------------------------
 -- Yetkiler ve satır düzeyi güvenlik
 -- ---------------------------------------------------------------------
 
+alter table public.tr_districts enable row level security;
 alter table public.profiles enable row level security;
 alter table public.profile_private enable row level security;
+alter table public.verifications enable row level security;
+alter table public.courier_profiles enable row level security;
 alter table public.listings enable row level security;
 alter table public.orders enable row level security;
 alter table public.messages enable row level security;
@@ -622,25 +936,35 @@ alter table public.notifications enable row level security;
 alter table public.reports enable row level security;
 alter table public.blocks enable row level security;
 
--- İstemci tablolara doğrudan yazamaz; yalnızca okur.
-revoke all on public.profiles, public.profile_private, public.listings, public.orders, public.messages,
-  public.payments, public.notifications, public.reports, public.blocks from anon, authenticated;
-grant select on public.profiles, public.listings to anon, authenticated;
-grant select on public.profile_private, public.orders, public.messages, public.payments,
-  public.notifications, public.reports, public.blocks to authenticated;
+revoke all on public.tr_districts, public.profiles, public.profile_private, public.verifications, public.courier_profiles,
+  public.listings, public.orders, public.messages, public.payments, public.notifications, public.reports, public.blocks
+  from anon, authenticated;
+grant select on public.tr_districts, public.profiles, public.listings to anon, authenticated;
+grant select on public.profile_private, public.verifications, public.courier_profiles, public.orders, public.messages,
+  public.payments, public.notifications, public.reports, public.blocks to authenticated;
+
+drop policy if exists districts_read on public.tr_districts;
+create policy districts_read on public.tr_districts for select using (true);
 
 drop policy if exists profiles_read on public.profiles;
-create policy profiles_read on public.profiles for select
-  using (active or id = auth.uid() or public.is_admin());
+create policy profiles_read on public.profiles for select using (active or id = auth.uid() or public.is_admin());
 
 drop policy if exists private_read on public.profile_private;
-create policy private_read on public.profile_private for select to authenticated
-  using (id = auth.uid() or public.is_admin());
+create policy private_read on public.profile_private for select to authenticated using (id = auth.uid() or public.is_admin());
+
+drop policy if exists verifications_read on public.verifications;
+create policy verifications_read on public.verifications for select to authenticated using (user_id = auth.uid() or public.is_admin());
+
+drop policy if exists couriers_read on public.courier_profiles;
+create policy couriers_read on public.courier_profiles for select to authenticated
+  using (user_id = auth.uid() or public.is_admin()
+         or exists (select 1 from public.profiles p where p.id = user_id and p.active and p.courier_status = 'approved'));
 
 drop policy if exists listings_read on public.listings;
 create policy listings_read on public.listings for select
   using (
-    (status = 'active' and not removed_by_admin and exists (select 1 from public.profiles p where p.id = owner_id and p.active))
+    (status = 'active' and not removed_by_admin
+      and exists (select 1 from public.profiles p where p.id = owner_id and p.active and p.seller_status = 'approved'))
     or owner_id = auth.uid()
     or public.is_admin()
   );
@@ -658,30 +982,30 @@ create policy payments_read on public.payments for select to authenticated
   using (public.is_admin() or exists (select 1 from public.orders o where o.id = order_id and (o.buyer_id = auth.uid() or o.seller_id = auth.uid())));
 
 drop policy if exists notifications_read on public.notifications;
-create policy notifications_read on public.notifications for select to authenticated
-  using (user_id = auth.uid());
+create policy notifications_read on public.notifications for select to authenticated using (user_id = auth.uid());
 
 drop policy if exists reports_read on public.reports;
-create policy reports_read on public.reports for select to authenticated
-  using (reporter_id = auth.uid() or public.is_admin());
+create policy reports_read on public.reports for select to authenticated using (reporter_id = auth.uid() or public.is_admin());
 
 drop policy if exists blocks_read on public.blocks;
-create policy blocks_read on public.blocks for select to authenticated
-  using (blocker_id = auth.uid());
+create policy blocks_read on public.blocks for select to authenticated using (blocker_id = auth.uid());
 
--- İç yardımcı fonksiyonlar dışarıdan çağrılamaz; yalnızca herkese açık RPC'ler çağrılabilir.
+-- İç yardımcılar ve ödeme fonksiyonları istemciden çağrılamaz.
 revoke execute on all functions in schema public from public, anon, authenticated;
+grant execute on function public.is_admin(), public.buyer_fee_rate(), public.seller_fee_rate() to anon, authenticated;
 grant execute on function
-  public.is_admin(), public.hatay_districts(), public.buyer_fee_rate(), public.seller_fee_rate()
-  to anon, authenticated;
-grant execute on function
-  public.update_profile(text, text, text, text, text, text, text),
+  public.update_profile(text, text, text, text, text, text, text, text, text),
   public.delete_my_account(),
-  public.save_listing(uuid, text, text, numeric, text, text[], text, text[], text),
+  public.submit_seller_application(text, text, text, text, text, boolean, boolean),
+  public.submit_courier_application(text, text, text, text, text, text, text[], boolean, boolean),
+  public.update_courier_profile(boolean, text[], text),
+  public.review_verification(uuid, boolean, text),
+  public.save_listing(uuid, text, text, numeric, text, text[], text, text[], text, text),
   public.set_listing_status(uuid, text),
   public.delete_listing(uuid),
   public.create_order(uuid, int, timestamptz, text, text, text, text),
   public.order_action(uuid, text, text),
+  public.set_shipment(uuid, text, text),
   public.send_message(uuid, text),
   public.mark_chat_read(uuid),
   public.mark_notifications_read(),
@@ -691,5 +1015,15 @@ grant execute on function
   public.resolve_report(uuid),
   public.admin_set_user_active(uuid, boolean),
   public.admin_set_user_role(uuid, text),
-  public.admin_delete_user(uuid)
+  public.admin_delete_user(uuid),
+  public.admin_mark_payout(uuid[])
   to authenticated;
+grant select on all tables in schema public to service_role;
+grant execute on function
+  public.payment_prepare(uuid, uuid),
+  public.payment_record_pending(uuid, text, numeric),
+  public.payment_confirm(text, text, text, numeric, text, text),
+  public.payment_fail(text, text),
+  public.payment_for_refund(uuid, uuid),
+  public.payment_mark_refunded(uuid, uuid, text)
+  to service_role;

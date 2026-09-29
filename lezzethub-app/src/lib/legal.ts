@@ -1,6 +1,6 @@
-// Gizlilik politikası ve kullanım koşulları.
+// Aydınlatma metni, açık rıza, kullanım koşulları, satıcı/kurye beyanları ve mesafeli satış metni.
 // ÖNEMLİ: Bu metinler bir başlangıç şablonudur. Yayından önce [köşeli parantez] içindeki alanları
-// doldurun ve metinleri bir hukuk danışmanına kontrol ettirin.
+// doldurun ve metinleri mutlaka bir hukuk danışmanına kontrol ettirin.
 import { SUPPORT_EMAIL } from './config';
 
 export interface LegalDoc {
@@ -9,99 +9,223 @@ export interface LegalDoc {
   sections: { heading: string; body: string }[];
 }
 
-const CONTROLLER = '[Şirket unvanı / işletme sahibi adı], [adres], Hatay';
+export type LegalKey = 'privacy' | 'consent' | 'terms' | 'seller' | 'courier' | 'sales';
 
-export const LEGAL_DOCS: Record<'privacy' | 'terms', LegalDoc> = {
+const CONTROLLER = '[Şirket unvanı], [MERSİS no], [adres]';
+const UPDATED = '28 Eylül 2026';
+
+export const LEGAL_DOCS: Record<LegalKey, LegalDoc> = {
   privacy: {
-    title: 'Gizlilik Politikası ve KVKK Aydınlatma Metni',
-    updated: '28 Eylül 2026',
+    title: 'KVKK Aydınlatma Metni ve Gizlilik Politikası',
+    updated: UPDATED,
     sections: [
       {
         heading: '1. Veri sorumlusu',
-        body: `6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) kapsamında veri sorumlusu ${CONTROLLER}’dır. Sorularınız ve başvurularınız için: ${SUPPORT_EMAIL}`,
+        body: `6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) kapsamında veri sorumlusu ${CONTROLLER}’dır. Başvurularınız için: ${SUPPORT_EMAIL}`,
       },
       {
         heading: '2. İşlenen kişisel veriler',
         body:
-          '• Kimlik ve iletişim: ad soyad, e-posta adresi.\n' +
-          '• Konum: ilçe, mahalle ve (isteğe bağlı) açık adres.\n' +
-          '• Profil: fotoğraf, kısa tanıtım, müsaitlik bilgisi.\n' +
+          '• Kimlik ve iletişim: ad soyad, e-posta, telefon.\n' +
+          '• Konum: il, ilçe, mahalle ve açık adres.\n' +
+          '• Satıcılar için: hijyen eğitimi belgesi ve e-Devlet doğrulama numarası, IBAN ve hesap sahibi adı.\n' +
+          '• Kuryeler için: sürücü belgesi (A2/B) görüntüsü ve belge numarası, hizmet bölgesi, telefon.\n' +
           '• İlan içerikleri: yemek fotoğrafları, açıklamalar, fiyatlar.\n' +
-          '• İşlem bilgileri: siparişler, randevular, ödeme onay kayıtları, uygulama içi mesajlar.\n' +
-          '• Teknik veriler: oturum bilgileri ve hata kayıtları.\n' +
-          'Uygulama kart bilgisi toplamaz; uygulama içinde ödeme alınmaz.',
+          '• İşlem bilgileri: siparişler, randevular, ödeme kayıtları (kartın yalnızca son 4 hanesi), kargo takip bilgisi, uygulama içi mesajlar.\n' +
+          '• Onay kayıtları: koşulların, açık rızanın ve beyanların kabul edildiği tarih.\n' +
+          '• Teknik veriler: oturum bilgileri, IP adresi ve hata kayıtları.',
       },
       {
         heading: '3. İşleme amaçları ve hukuki sebepler',
         body:
-          'Verileriniz; hesabınızı oluşturmak ve yönetmek, alıcı ile satıcıyı ilçe ve mahalle bazında buluşturmak, siparişleri ve randevuları yürütmek, ödeme onaylarını kaydetmek, taraflar arası mesajlaşmayı sağlamak, güvenliği ve kötüye kullanımın önlenmesini sağlamak, yasal yükümlülükleri yerine getirmek amacıyla işlenir. ' +
-          'Hukuki sebepler: sözleşmenin kurulması ve ifası (KVKK m.5/2-c), hukuki yükümlülük (m.5/2-ç), meşru menfaat (m.5/2-f) ve gerektiğinde açık rızanızdır.',
+          'Verileriniz; üyeliğin kurulması ve yönetimi, alıcı–satıcı–kurye eşleştirmesi, siparişlerin, online ödemelerin, iadelerin ve satıcı ödemelerinin yürütülmesi, satıcı ve kurye belgelerinin doğrulanması, taraflar arası mesajlaşma, güvenlik ve kötüye kullanımın önlenmesi ile yasal yükümlülüklerin yerine getirilmesi amaçlarıyla işlenir. ' +
+          'Hukuki sebepler: sözleşmenin kurulması ve ifası (KVKK m.5/2-c), hukuki yükümlülük (m.5/2-ç), bir hakkın tesisi ve korunması (m.5/2-e), meşru menfaat (m.5/2-f) ve Açık Rıza Metni’nde belirtilen işlemler için açık rızanızdır.',
       },
       {
         heading: '4. Kimler görebilir?',
         body:
-          '• Adınız, profil fotoğrafınız, ilçe/mahalleniz ve ilanlarınız herkese açıktır.\n' +
-          '• E-posta adresiniz ve açık adresiniz herkese açık değildir.\n' +
-          '• Açık adresiniz yalnızca ilgili siparişin karşı tarafıyla paylaşılır: kurye siparişinde alıcının adresi satıcıya; elden teslimde satıcının adresi, satıcı siparişi onayladıktan sonra alıcıya gösterilir.\n' +
+          '• Adınız, profil fotoğrafınız, il/ilçe/mahalleniz ve ilanlarınız herkese açıktır.\n' +
+          '• E-posta, telefon ve açık adresiniz herkese açık değildir; yalnızca ilgili siparişin karşı tarafıyla paylaşılır.\n' +
+          '• Onaylı kuryelerin adı, araç türü, hizmet ilçeleri ve telefonu, kurye arayan giriş yapmış kullanıcılara gösterilir.\n' +
+          '• Hijyen belgesi, ehliyet ve IBAN bilgileri yalnızca sizin ve platform yöneticilerinin erişebildiği özel depoda tutulur.\n' +
           '• Mesajlar yalnızca siparişin alıcısı ve satıcısı tarafından görülebilir.',
       },
       {
         heading: '5. Aktarım ve saklama',
         body:
-          'Veriler, altyapı hizmeti aldığımız bulut sağlayıcısının (Supabase) sunucularında saklanır; bu sunucular yurt dışında bulunabilir. Yurt dışına aktarım KVKK m.9’a uygun olarak yapılır. ' +
-          'Verileriniz hesabınız açık olduğu sürece ve yasal saklama süreleri boyunca tutulur. Hesabınızı sildiğinizde profiliniz, ilanlarınız ve bildirimleriniz silinir; karşı tarafın kayıtlarında bulunan geçmiş siparişler, kimliğiniz kaldırılarak saklanabilir.',
+          'Kart bilgileriniz uygulamaya girilmez; ödeme, lisanslı ödeme kuruluşu iyzico’nun güvenli ödeme sayfasında alınır ve kart verisi platformda saklanmaz. ' +
+          'Veriler altyapı sağlayıcımızın (Supabase) sunucularında saklanır; bu sunucular yurt dışında bulunabilir ve aktarım KVKK m.9’a uygun olarak yapılır. ' +
+          'Verileriniz üyelik süresince ve ilgili mevzuattaki saklama süreleri (ör. ticari kayıtlar için 10 yıl) boyunca tutulur; süre sonunda silinir, yok edilir veya anonim hale getirilir.',
       },
       {
         heading: '6. Haklarınız',
         body:
-          'KVKK m.11 uyarınca verilerinizin işlenip işlenmediğini öğrenme, bilgi talep etme, düzeltilmesini veya silinmesini isteme, itiraz etme ve zararın giderilmesini talep etme haklarına sahipsiniz. ' +
-          `Hesabınızı uygulamada Profil → Hesabımı Sil adımıyla dilediğiniz an silebilirsiniz. Diğer talepler için ${SUPPORT_EMAIL} adresine yazabilirsiniz.`,
+          'KVKK m.11 uyarınca verilerinizin işlenip işlenmediğini öğrenme, bilgi talep etme, düzeltilmesini veya silinmesini isteme, aktarıldığı üçüncü kişileri bilme, itiraz etme ve zararın giderilmesini talep etme haklarına sahipsiniz. Açık rızanızı dilediğiniz an geri alabilirsiniz; bu durumda açık rızaya dayalı hizmetler (ör. satıcı veya kurye hesabı) sona erer. ' +
+          `Hesabınızı Profil → Hesabımı Sil adımıyla silebilirsiniz. Diğer talepler için ${SUPPORT_EMAIL} adresine yazabilirsiniz.`,
       },
       {
         heading: '7. Çocuklar',
-        body: 'LezzetHub 18 yaşından küçüklere yönelik değildir. 18 yaşından küçükseniz uygulamayı kullanmayın.',
+        body: 'LezzetHub 18 yaşından küçüklere yönelik değildir.',
+      },
+    ],
+  },
+  consent: {
+    title: 'Kişisel Verilerin İşlenmesine İlişkin Açık Rıza Metni',
+    updated: UPDATED,
+    sections: [
+      {
+        heading: 'Açık rıza verdiğim işlemler',
+        body:
+          'KVKK Aydınlatma Metni’ni okudum. Aşağıdaki işlemler için özgür irademle açık rıza veriyorum:\n\n' +
+          '• Kişisel verilerimin, altyapı hizmeti alınan bulut sağlayıcısının yurt dışındaki sunucularında saklanması ve bu amaçla yurt dışına aktarılması.\n' +
+          '• Konum bilgimin (il, ilçe, mahalle) yakınımdaki alıcı, satıcı ve kuryelerle eşleşme amacıyla kullanılması.\n' +
+          '• Satıcı olursam: hijyen eğitimi belgemin ve IBAN bilgilerimin doğrulama ve ödeme amacıyla işlenmesi.\n' +
+          '• Kurye olursam: sürücü belgemin doğrulama amacıyla işlenmesi ve telefon numaramın kurye arayan kullanıcılarla paylaşılması.',
+      },
+      {
+        heading: 'Önemli bilgi',
+        body:
+          'Sürücü belgesinde kan grubu gibi özel nitelikli kişisel veri bulunabilir. Yüklemeden önce bu alanı kapatabilirsiniz; doğrulama için sınıf, belge numarası ve geçerlilik tarihinin okunabilmesi yeterlidir. ' +
+          'Açık rızanızı dilediğiniz an geri alabilirsiniz. Geri alma, geri alma tarihinden önceki işlemleri etkilemez.',
       },
     ],
   },
   terms: {
     title: 'Kullanım Koşulları',
-    updated: '28 Eylül 2026',
+    updated: UPDATED,
     sections: [
       {
         heading: '1. Hizmetin tanımı',
-        body: `LezzetHub, Hatay ilinde ev yemeği hazırlayan satıcılarla alıcıları buluşturan bir aracı platformdur. Platformu ${CONTROLLER} işletir. LezzetHub yemeklerin hazırlayıcısı veya satıcısı değildir.`,
+        body: `LezzetHub, Türkiye genelinde ev yemeği hazırlayan satıcılarla alıcıları ve bağımsız kuryeleri buluşturan bir aracı hizmet sağlayıcıdır. Platformu ${CONTROLLER} işletir. LezzetHub yemeklerin üreticisi veya satıcısı değildir; satış sözleşmesi alıcı ile satıcı arasında kurulur.`,
       },
       {
         heading: '2. Üyelik',
-        body: 'Üye olmak için 18 yaşını doldurmuş olmanız ve doğru bilgi vermeniz gerekir. Hesabınızın güvenliğinden siz sorumlusunuz.',
-      },
-      {
-        heading: '3. Satıcıların sorumlulukları',
         body:
-          '• Yemekleri hijyen kurallarına ve gıda mevzuatına uygun hazırlamak.\n' +
-          '• İlan açıklamasında içerik ve alerjenleri doğru belirtmek.\n' +
-          '• İlan fotoğraflarının kendi hazırladığı yemeğe ait ve gerçeği yansıtır olması.\n' +
-          '• Kendi vergi ve yasal yükümlülüklerini yerine getirmek.',
+          'Üye olmak için 18 yaşını doldurmuş olmanız, doğru bilgi vermeniz, Kullanım Koşulları’nı ve Aydınlatma Metni’ni kabul etmeniz ve Açık Rıza Metni’ne onay vermeniz gerekir. Hesabınızın güvenliğinden siz sorumlusunuz.',
       },
       {
-        heading: '4. Sipariş, ödeme ve hizmet bedeli',
+        heading: '3. Satıcılar',
         body:
-          'Siparişler randevuludur ve satıcı onayıyla kesinleşir. Uygulama içinde doğrudan ödeme alınmaz; ödeme adımı platform yöneticisinin onayıyla işaretlenir. ' +
-          'Alıcıdan ürün tutarının %10’u, satıcıdan %15’i hizmet bedeli olarak alınır; tutarlar sipariş ekranında satır satır gösterilir. İptal ve iade koşulları sipariş aşamasına göre taraflarca ve platform desteğiyle çözülür.',
+          'Satış yapmak için e-Devlet üzerinden doğrulanabilir hijyen eğitimi belgesinin yüklenmesi, Satıcı Beyanı ve Sorumluluk Taahhüdü’nün onaylanması ve belgenin platform tarafından onaylanması zorunludur. Satıcı; gıda güvenliği, hijyen, etiketleme, alerjen bildirimi, vergi ve diğer yasal yükümlülüklerden bizzat sorumludur.',
       },
       {
-        heading: '5. Yasak içerik ve davranışlar',
+        heading: '4. Kuryeler',
         body:
-          'Hakaret, taciz, nefret söylemi, müstehcenlik, yanıltıcı veya başkasına ait fotoğraf, dolandırıcılık ve yasa dışı ürün satışı kesinlikle yasaktır; bu tür içeriklere karşı sıfır tolerans uygulanır. ' +
-          'Uygunsuz ilan veya kullanıcıları uygulamadaki “Şikayet et” özelliğiyle bildirebilir, kullanıcıları engelleyebilirsiniz. Şikayetler en geç 24 saat içinde incelenir; kuralları ihlal eden içerikler kaldırılır ve hesaplar kapatılabilir.',
+          'Kurye olarak listelenmek için geçerli A2 veya B sınıfı sürücü belgesinin yüklenmesi ve Kurye Beyanı’nın onaylanması zorunludur. Kuryeler LezzetHub’ın çalışanı değildir; teslimat ücreti ve koşulları kurye ile onu arayan kullanıcı arasında belirlenir.',
       },
       {
-        heading: '6. Sorumluluğun sınırı',
-        body: 'LezzetHub, satıcıların hazırladığı yemeklerin içeriğinden, kalitesinden ve teslimatından doğrudan sorumlu değildir; ancak şikayetleri inceler ve gerekli önlemleri alır.',
+        heading: '5. Sipariş, teslimat ve online ödeme',
+        body:
+          'Siparişler randevuludur ve satıcının onayıyla ödeme aşamasına geçer. Ödeme, iyzico güvenli ödeme sayfası üzerinden kredi/banka kartıyla online alınır. ' +
+          'Teslimat elden, kurye veya kargo ile yapılır. Kurye/kargo ücretini ilanda belirtildiği gibi alıcı veya satıcı üstlenir; alıcı ödüyorsa bu ücret online ödemeye dahil değildir ve doğrudan kuryeye/kargo firmasına ödenir. ' +
+          'Alıcıdan ürün tutarının %10’u, satıcıdan %15’i hizmet bedeli olarak alınır. Satıcının net kazancı, sipariş tamamlandıktan sonra kayıtlı IBAN’ına aktarılır. İptal ve iadeler Mesafeli Satış Sözleşmesi’ndeki koşullara göre yapılır.',
       },
       {
-        heading: '7. Değişiklikler ve iletişim',
-        body: `Koşullar güncellenebilir; önemli değişiklikler uygulamada duyurulur. İletişim: ${SUPPORT_EMAIL}. Uyuşmazlıklarda Türkiye Cumhuriyeti hukuku uygulanır ve Hatay mahkemeleri yetkilidir.`,
+        heading: '6. Yasak içerik ve davranışlar',
+        body:
+          'Hakaret, taciz, nefret söylemi, müstehcenlik, yanıltıcı veya başkasına ait fotoğraf, sahte belge, dolandırıcılık ve yasa dışı ürün satışı yasaktır; bu tür içeriklere karşı sıfır tolerans uygulanır. ' +
+          'Uygunsuz ilan veya kullanıcıları “Şikayet et” özelliğiyle bildirebilir, kullanıcıları engelleyebilirsiniz. Şikayetler en geç 24 saat içinde incelenir; ihlal eden içerikler kaldırılır, hesaplar kapatılabilir ve gerektiğinde yetkili makamlara bildirilir.',
+      },
+      {
+        heading: '7. Sorumluluğun sınırı',
+        body:
+          'LezzetHub, satıcıların hazırladığı yemeklerin içeriğinden, hijyeninden ve kalitesinden, kuryelerin ve kargo firmalarının teslimat hizmetinden doğrudan sorumlu değildir. Belge onayı, belgenin görünür bilgilerinin kontrolünden ibarettir ve satıcının veya kuryenin yasal yükümlülüklerini ortadan kaldırmaz.',
+      },
+      {
+        heading: '8. Değişiklikler ve iletişim',
+        body: `Koşullar güncellenebilir; önemli değişiklikler uygulamada duyurulur. İletişim: ${SUPPORT_EMAIL}. Uyuşmazlıklarda Türkiye Cumhuriyeti hukuku uygulanır; tüketiciler Tüketici Hakem Heyetleri ve Tüketici Mahkemelerine başvurabilir.`,
+      },
+    ],
+  },
+  seller: {
+    title: 'Satıcı Beyanı ve Sorumluluk Taahhüdü',
+    updated: UPDATED,
+    sections: [
+      {
+        heading: '1. Belge beyanı',
+        body:
+          'Yüklediğim hijyen eğitimi belgesinin bana ait, gerçek, geçerli ve e-Devlet üzerinden doğrulanabilir olduğunu; belgenin iptal edilmesi veya süresinin dolması halinde platformu derhal bilgilendireceğimi beyan ederim. Sahte veya başkasına ait belge yüklemenin hukuki ve cezai sonuçlarından bizzat sorumluyum.',
+      },
+      {
+        heading: '2. Mevzuata uyum',
+        body:
+          'T.C. Sağlık Bakanlığı’nın hijyen ve halk sağlığına ilişkin mevzuatını (Hijyen Eğitimi Yönetmeliği dahil) ve gıda üretimi, satışı ve denetimine ilişkin mevzuatı (5996 sayılı Kanun, Türk Gıda Kodeksi ve Tarım ve Orman Bakanlığı düzenlemeleri) bildiğimi; gerekli kayıt, izin ve bildirimleri yapmanın kendi sorumluluğumda olduğunu kabul ederim.',
+      },
+      {
+        heading: '3. Riskler ve koşullar',
+        body:
+          'Ev ortamında hazırlanan gıdaların; bozulma, çapraz bulaşma, alerjen, yanlış saklama ve taşıma gibi sağlık riskleri taşıdığını biliyorum. Yemekleri hijyen kurallarına uygun hazırlayacağımı, içerik ve alerjenleri ilanda eksiksiz belirteceğimi, soğuk zinciri ve uygun ambalajı sağlayacağımı, son tüketim bilgisini alıcıya bildireceğimi taahhüt ederim.',
+      },
+      {
+        heading: '4. Sorumluluk',
+        body:
+          'Sattığım ürünlerin neden olabileceği her türlü sağlık sorunu, zarar, idari para cezası ve yasal yaptırımın sorumluluğunun tamamen bana ait olduğunu; LezzetHub’ın yalnızca aracı hizmet sağlayıcı olduğunu ve bu nedenle LezzetHub’a yöneltilebilecek talep ve zararları karşılayacağımı kabul ederim.',
+      },
+      {
+        heading: '5. Vergi ve ödemeler',
+        body:
+          'Satışlarımdan doğan vergi ve diğer mali yükümlülükler bana aittir. Net kazancımın, sipariş tamamlandıktan sonra beyan ettiğim ve adıma kayıtlı IBAN’a aktarılmasını kabul ederim.',
+      },
+    ],
+  },
+  courier: {
+    title: 'Kurye Beyanı ve Sorumluluk Taahhüdü',
+    updated: UPDATED,
+    sections: [
+      {
+        heading: '1. Sürücü belgesi',
+        body:
+          'Yüklediğim A2 veya B sınıfı sürücü belgesinin bana ait ve geçerli olduğunu; belgemin iptal edilmesi, askıya alınması veya süresinin dolması halinde kurye hizmetini derhal durduracağımı ve platformu bilgilendireceğimi beyan ederim.',
+      },
+      {
+        heading: '2. Trafik ve gıda taşıma kuralları',
+        body:
+          '2918 sayılı Karayolları Trafik Kanunu başta olmak üzere trafik mevzuatına, araç sigorta ve muayene yükümlülüklerine uyacağımı; yiyecekleri temiz, kapalı ve uygun ısıda taşıyacağımı taahhüt ederim.',
+      },
+      {
+        heading: '3. Bağımsızlık ve sorumluluk',
+        body:
+          'LezzetHub’ın çalışanı olmadığımı, teslimat ücretini ve koşulları beni arayan kullanıcıyla kendim belirlediğimi; vergi, sigorta ve diğer yasal yükümlülüklerimin ve teslimat sırasında doğabilecek kaza, hasar ve gecikmelerin sorumluluğunun bana ait olduğunu kabul ederim.',
+      },
+      {
+        heading: '4. İletişim bilgisi',
+        body: 'Onaylandığımda adımın, araç türümün, hizmet ilçelerimin ve telefon numaramın kurye arayan kullanıcılara gösterileceğini biliyorum. Müsaitliğimi kurye panelinden kapatabilirim.',
+      },
+    ],
+  },
+  sales: {
+    title: 'Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi',
+    updated: UPDATED,
+    sections: [
+      {
+        heading: '1. Taraflar',
+        body:
+          'Satıcı: sipariş ekranında adı gösterilen LezzetHub satıcısı. Alıcı: siparişi veren LezzetHub üyesi. Aracı hizmet sağlayıcı: ' +
+          `${CONTROLLER} (LezzetHub). İletişim: ${SUPPORT_EMAIL}.`,
+      },
+      {
+        heading: '2. Konu, fiyat ve ödeme',
+        body:
+          'Sözleşmenin konusu, sipariş ekranında adı, adedi, birim fiyatı ve toplam tutarı gösterilen üründür. Tüm fiyatlara KDV dahildir. Toplam tutar; ürün bedeli ile %10 alıcı hizmet bedelinden oluşur ve iyzico güvenli ödeme sayfasında kartla ödenir. Kurye/kargo ücreti ilanda “alıcı öder” olarak belirtilmişse ödemeye dahil değildir.',
+      },
+      {
+        heading: '3. Teslimat',
+        body:
+          'Ürün, sipariş ekranında seçilen randevu zamanında elden, kurye veya kargo ile teslim edilir. Kargo gönderilerinde takip numarası sipariş ekranında paylaşılır. Teslimat masrafı ilanda belirtildiği şekilde alıcı veya satıcıya aittir.',
+      },
+      {
+        heading: '4. Cayma hakkı',
+        body:
+          'Mesafeli Sözleşmeler Yönetmeliği m.15 uyarınca çabuk bozulabilen veya son kullanma tarihi geçebilecek mallar ile tüketicinin kişisel ihtiyaçları doğrultusunda hazırlanan mallarda cayma hakkı kullanılamaz. Ev yemekleri bu kapsamdadır.',
+      },
+      {
+        heading: '5. İptal ve iade',
+        body:
+          'Satıcı onayından önce ve ödemeden önce sipariş ücretsiz iptal edilebilir. Ödeme sonrası; ürünün hiç teslim edilmemesi, ayıplı, bozuk veya ilandan farklı olması halinde LezzetHub desteğine başvurabilirsiniz. Haklı bulunan taleplerde tutar, ödemenin yapıldığı karta iade edilir.',
+      },
+      {
+        heading: '6. Şikayet ve uyuşmazlık',
+        body: `Şikayetlerinizi ${SUPPORT_EMAIL} adresine iletebilirsiniz. Parasal sınırlar dahilinde Tüketici Hakem Heyetleri, aşan durumlarda Tüketici Mahkemeleri yetkilidir.`,
       },
     ],
   },

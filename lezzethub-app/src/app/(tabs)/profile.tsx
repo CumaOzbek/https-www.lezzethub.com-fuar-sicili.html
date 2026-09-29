@@ -4,12 +4,14 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { DistrictPicker, ListingCard, LoginRequired, NeighborhoodInput } from '../../components/domain';
+import { ListingCard, LocationFields, LoginRequired } from '../../components/domain';
 import { useFeedback } from '../../components/feedback';
 import { AvatarPicker } from '../../components/photos';
-import { Avatar, Button, Card, EmptyState, Field, Header, InfoRow, LocationBadge, Row, Screen, SectionTitle, type IconName } from '../../components/ui';
+import { Avatar, Badge, Button, Card, EmptyState, Field, Header, InfoRow, LocationBadge, Row, Screen, SectionTitle, type IconName, type Tone } from '../../components/ui';
 import type * as api from '../../lib/api';
 import { SUPPORT_EMAIL } from '../../lib/config';
+import { VERIFICATION_LABEL, chatTime } from '../../lib/format';
+import type { VerificationStatus } from '../../lib/types';
 import { useStore } from '../../lib/store';
 import { colors, font } from '../../lib/theme';
 
@@ -18,6 +20,24 @@ function LinkRow({ icon, label, onPress, danger }: { icon: IconName; label: stri
     <Pressable onPress={onPress} style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.7 }]}>
       <Ionicons name={icon} size={19} color={danger ? colors.danger : colors.primary} />
       <Text style={{ flex: 1, fontSize: 15, color: danger ? colors.danger : colors.ink, fontWeight: '600' }}>{label}</Text>
+      <Ionicons name="chevron-forward" size={17} color={colors.muted} />
+    </Pressable>
+  );
+}
+
+const STATUS_TONE: Record<VerificationStatus, Tone> = { none: 'gray', pending: 'yellow', approved: 'green', rejected: 'red' };
+
+function RoleRow({ icon, title, status, text, onPress }: { icon: IconName; title: string; status: VerificationStatus; text: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.7 }]}>
+      <Ionicons name={icon} size={22} color={colors.primary} />
+      <View style={{ flex: 1 }}>
+        <Row style={{ justifyContent: 'space-between' }}>
+          <Text style={{ fontSize: 15, color: colors.ink, fontWeight: '700' }}>{title}</Text>
+          <Badge label={VERIFICATION_LABEL[status]} tone={STATUS_TONE[status]} />
+        </Row>
+        <Text style={[font.small, { marginTop: 2 }]}>{text}</Text>
+      </View>
       <Ionicons name="chevron-forward" size={17} color={colors.muted} />
     </Pressable>
   );
@@ -45,7 +65,17 @@ export default function Profile() {
   const set = <K extends keyof api.ProfileInput>(k: K, v: api.ProfileInput[K]) => setForm((f) => (f ? { ...f, [k]: v } : f));
 
   const startEdit = () => {
-    setForm({ name: me.name, bio: me.bio, district: me.district, neighborhood: me.neighborhood, address: me.address, availability: me.availability, avatar: me.avatar });
+    setForm({
+      name: me.name,
+      bio: me.bio,
+      province: me.province,
+      district: me.district,
+      neighborhood: me.neighborhood,
+      address: me.address,
+      phone: me.phone,
+      availability: me.availability,
+      avatar: me.avatar,
+    });
     setEditing(true);
   };
 
@@ -106,9 +136,9 @@ export default function Profile() {
         <Card>
           <Field label="Ad Soyad" icon="person-outline" value={form.name} onChangeText={(v) => set('name', v)} />
           <Field label="Kısa tanıtım (bio)" value={form.bio} onChangeText={(v) => set('bio', v)} multiline maxLength={240} placeholder="Mutfağını ve lezzetlerini kısaca anlat…" hint={`${form.bio.length}/240`} />
-          <DistrictPicker value={form.district} onChange={(d) => setForm((f) => (f ? { ...f, district: d, neighborhood: '' } : f))} />
-          <NeighborhoodInput district={form.district} value={form.neighborhood} onChange={(v) => set('neighborhood', v)} />
+          <LocationFields value={form} onChange={(loc) => setForm((f) => (f ? { ...f, ...loc } : f))} />
           <Field label="Açık adres" icon="location-outline" value={form.address} onChangeText={(v) => set('address', v)} multiline placeholder="Sokak, bina no, daire" hint="Kurye siparişlerinde otomatik doldurulur. Yalnızca siparişin karşı tarafına gösterilir." />
+          <Field label="Telefon" icon="call-outline" value={form.phone} onChangeText={(v) => set('phone', v)} keyboardType="phone-pad" placeholder="05XX XXX XX XX" hint="Herkese açık değildir; ödeme ve kargo işlemlerinde kullanılır." />
           <Field label="Genel müsaitlik saatleri" icon="time-outline" value={form.availability} onChangeText={(v) => set('availability', v)} placeholder="Ör. Hafta içi 10:00–20:00" maxLength={120} />
           <Button title="Kaydet" icon="checkmark-circle-outline" onPress={save} loading={saving} />
         </Card>
@@ -124,14 +154,34 @@ export default function Profile() {
         <Text style={[font.h2, { marginTop: 12 }]}>{me.name}</Text>
         <Text style={font.small}>{me.email}</Text>
         <View style={{ marginTop: 10 }}>
-          <LocationBadge district={me.district} neighborhood={me.neighborhood} />
+          <LocationBadge province={me.province} district={me.district} neighborhood={me.neighborhood} />
         </View>
         <Text style={[font.body, { textAlign: 'center', marginTop: 12 }]}>{me.bio || 'Henüz bir tanıtım yazmadın. Profilini düzenleyerek komşularına kendini tanıt.'}</Text>
       </Card>
 
       <Card style={{ marginTop: 14 }}>
         <InfoRow icon="location-outline" label="Açık adres (yalnızca sipariş taraflarına görünür)" value={me.address} />
+        <InfoRow icon="call-outline" label="Telefon (yalnızca sen ve yöneticiler görür)" value={me.phone} />
         <InfoRow icon="time-outline" label="Genel müsaitlik" value={me.availability} />
+      </Card>
+
+      <SectionTitle title="Satıcı ve kurye hesabı" />
+      <Card style={{ paddingVertical: 4 }}>
+        <RoleRow
+          icon="storefront-outline"
+          title="Satıcı"
+          status={me.sellerStatus}
+          text={me.sellerStatus === 'approved' ? 'Hijyen belgen onaylı; ilan verebilirsin.' : 'Satış için e-Devlet onaylı hijyen belgesi gerekir.'}
+          onPress={() => router.push('/apply/seller')}
+        />
+        <RoleRow
+          icon="bicycle-outline"
+          title="Kurye"
+          status={me.courierStatus}
+          text={me.courierStatus === 'approved' ? 'Kurye panelinden müsaitliğini yönet.' : 'A2 veya B sınıfı ehliyetle kurye ol.'}
+          onPress={() => router.push('/apply/courier')}
+        />
+        <LinkRow icon="people-outline" label="Yakınımdaki kuryeler" onPress={() => router.push('/couriers')} />
       </Card>
 
       <SectionTitle title={`Yayındaki ilanlarım (${myListings.length})`} action="Tümünü yönet" onAction={() => router.push('/my-listings')} />
@@ -168,16 +218,24 @@ export default function Profile() {
       <SectionTitle title="Hesap ve yardım" />
       <Card style={{ paddingVertical: 4 }}>
         <LinkRow icon="document-text-outline" label="Kullanım Koşulları" onPress={() => router.push('/legal/terms')} />
-        <LinkRow icon="shield-checkmark-outline" label="Gizlilik Politikası / KVKK" onPress={() => router.push('/legal/privacy')} />
+        <LinkRow icon="shield-checkmark-outline" label="KVKK Aydınlatma Metni" onPress={() => router.push('/legal/privacy')} />
+        <LinkRow icon="hand-right-outline" label="Açık Rıza Metni" onPress={() => router.push('/legal/consent')} />
+        <LinkRow icon="receipt-outline" label="Mesafeli Satış Sözleşmesi" onPress={() => router.push('/legal/sales')} />
         <LinkRow icon="mail-outline" label={`Destek: ${SUPPORT_EMAIL}`} onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)} />
         <LinkRow icon="log-out-outline" label="Çıkış Yap" onPress={doLogout} />
         <LinkRow icon="trash-outline" label="Hesabımı Sil" onPress={doDelete} danger />
       </Card>
 
+      {(me.acceptedTermsAt || me.kvkkConsentAt) && (
+        <Text style={[font.tiny, { textAlign: 'center', marginTop: 12 }]}>
+          {me.acceptedTermsAt ? `Koşullar ve aydınlatma metni kabulü: ${chatTime(me.acceptedTermsAt)}` : ''}
+          {me.kvkkConsentAt ? ` · KVKK açık rıza: ${chatTime(me.kvkkConsentAt)}` : ''}
+        </Text>
+      )}
       {mode === 'local' && actions.resetDemo && (
         <Button title="Demo verilerini sıfırla" variant="ghost" small onPress={doReset} style={{ marginTop: 12, alignSelf: 'center' }} />
       )}
-      <Text style={[font.tiny, { textAlign: 'center', marginTop: 8 }]}>LezzetHub · Hatay · v1.0{mode === 'local' ? ' · Demo modu' : ''}</Text>
+      <Text style={[font.tiny, { textAlign: 'center', marginTop: 8 }]}>LezzetHub · Türkiye · v1.1{mode === 'local' ? ' · Demo modu' : ''}</Text>
     </Screen>
   );
 }

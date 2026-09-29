@@ -3,12 +3,12 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { ListingImage, LoginRequired, PriceBreakdown } from '../../components/domain';
+import { ConsentCheck, LegalLink, ListingImage, LoginRequired, PriceBreakdown } from '../../components/domain';
 import { useFeedback } from '../../components/feedback';
 import { Button, Card, EmptyState, Field, Header, LocationBadge, Notice, Row, Screen, StickyFooter, Toggle } from '../../components/ui';
 import * as api from '../../lib/api';
 import { calcBreakdown } from '../../lib/commission';
-import { dateShort, dayLabel, hhmm, tl } from '../../lib/format';
+import { dateShort, dayLabel, hhmm, shippingPayerText, tl } from '../../lib/format';
 import { useStore } from '../../lib/store';
 import { colors, font, radius } from '../../lib/theme';
 import type { DeliveryMethod } from '../../lib/types';
@@ -45,7 +45,13 @@ export default function NewOrder() {
   const [dayIdx, setDayIdx] = useState(() => (buildSlots(days[0]!).length ? 0 : 1));
   const slots = useMemo(() => buildSlots(days[dayIdx]!), [days, dayIdx]);
   const [slot, setSlot] = useState<string | null>(null);
-  const [delivery, setDelivery] = useState<DeliveryMethod>(listing?.delivery.includes('pickup') ? 'pickup' : 'courier');
+  const [delivery, setDelivery] = useState<DeliveryMethod>(() => {
+    const opts = listing?.delivery ?? ['pickup'];
+    // Farklı ildeki satıcıdan varsayılan olarak kargo; aynı ilde elden teslim.
+    if (listing && me && me.province !== listing.province && opts.includes('cargo')) return 'cargo';
+    return opts.includes('pickup') ? 'pickup' : (opts[0] ?? 'pickup');
+  });
+  const [contract, setContract] = useState(false);
   const [address, setAddress] = useState(me?.address ?? '');
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
@@ -68,7 +74,9 @@ export default function NewOrder() {
   }
 
   const b = calcBreakdown(listing.price, quantity);
-  const otherDistrict = me.district !== listing.district;
+  const otherProvince = me.province !== listing.province;
+  const otherDistrict = !otherProvince && me.district !== listing.district;
+  const needsAddress = delivery !== 'pickup';
 
   const submit = async () => {
     setLoading(true);
@@ -91,7 +99,7 @@ export default function NewOrder() {
                 <Text style={font.tiny}>Toplam</Text>
                 <Text style={{ fontWeight: '900', fontSize: 19, color: colors.ink }}>{tl(b.buyerTotal)}</Text>
               </View>
-              <Button title="Siparişi Gönder" icon="send" onPress={submit} loading={loading} style={{ flex: 1 }} disabled={!slot} />
+              <Button title="Siparişi Gönder" icon="send" onPress={submit} loading={loading} style={{ flex: 1 }} disabled={!slot || !contract} />
             </Row>
           </StickyFooter>
         }
@@ -106,11 +114,24 @@ export default function NewOrder() {
                 {listing.title}
               </Text>
               <Text style={{ color: colors.accentDark, fontWeight: '900', marginTop: 2 }}>{tl(listing.price)} / adet</Text>
-              <LocationBadge district={listing.district} neighborhood={listing.neighborhood} compact />
+              <LocationBadge province={listing.province} district={listing.district} neighborhood={listing.neighborhood} compact />
             </View>
           </Row>
         </Card>
 
+        {otherProvince && (
+          <View style={{ marginTop: 12 }}>
+            <Notice
+              title="Dikkat: farklı il"
+              text={
+                listing.delivery.includes('cargo')
+                  ? `Satıcı ${listing.province} ilinde. Kargo ile teslimatı seçmeni öneririz.`
+                  : `Satıcı ${listing.province} ilinde ve kargo ile gönderim yapmıyor. Elden teslim için ${listing.province} iline gitmen gerekir.`
+              }
+              icon="warning-outline"
+            />
+          </View>
+        )}
         {otherDistrict && (
           <View style={{ marginTop: 12 }}>
             <Notice
@@ -178,25 +199,35 @@ export default function NewOrder() {
         {listing.delivery.includes('courier') && (
           <Toggle label="Kurye" description="Adresine kuryeyle gönderilir" icon="bicycle" value={delivery === 'courier'} onChange={() => setDelivery('courier')} />
         )}
-        {delivery === 'courier' && (
-          <Field
-            label="Teslimat adresi"
-            icon="location-outline"
-            value={address}
-            onChangeText={setAddress}
-            placeholder="Mahalle, sokak, bina, daire"
-            multiline
-            hint={me.address ? 'Profilindeki adresten otomatik dolduruldu.' : 'Profiline adres eklersen bir dahaki sefere otomatik dolar.'}
-          />
+        {listing.delivery.includes('cargo') && (
+          <Toggle label="Kargo" description="Türkiye’nin her yerine kargoyla gönderilir; takip numarası paylaşılır" icon="cube-outline" value={delivery === 'cargo'} onChange={() => setDelivery('cargo')} />
+        )}
+        {needsAddress && (
+          <>
+            <Notice tone={listing.shippingPayer === 'seller' ? 'green' : 'honey'} icon={listing.shippingPayer === 'seller' ? 'gift-outline' : 'wallet-outline'} text={shippingPayerText(delivery, listing.shippingPayer)} />
+            <Field
+              label={delivery === 'cargo' ? 'Kargo teslimat adresi' : 'Teslimat adresi'}
+              icon="location-outline"
+              value={address}
+              onChangeText={setAddress}
+              placeholder={delivery === 'cargo' ? 'Mahalle, sokak, bina no, daire, ilçe / il, telefon' : 'Mahalle, sokak, bina, daire'}
+              multiline
+              style={{ marginTop: 12 }}
+              hint={me.address ? 'Profilindeki adresten otomatik dolduruldu.' : 'Profiline adres eklersen bir dahaki sefere otomatik dolar.'}
+            />
+          </>
         )}
 
         <Field label="Satıcıya not (isteğe bağlı)" icon="chatbubble-ellipses-outline" value={note} onChangeText={setNote} placeholder="Ör. Fıstıklı olsun, zili çalmayın…" multiline maxLength={300} style={{ marginTop: 6 }} />
 
         <Text style={styles.section}>Hesap dökümü</Text>
         <PriceBreakdown b={b} unitPrice={listing.price} quantity={quantity} perspective="buyer" />
-        <Text style={[font.tiny, { marginTop: 8, lineHeight: 16 }]}>
-          Uygulama içinde doğrudan ödeme alınmaz. Satıcı onayından sonra “Ödeme Yap” ile ödemeyi başlatırsın; ödeme yönetici onayıyla kesinleşir.
+        <Text style={[font.tiny, { marginTop: 8, lineHeight: 16, marginBottom: 14 }]}>
+          Şimdi ödeme alınmaz. Satıcı siparişi onayladığında “Online Öde” ile kartınla güvenli ödeme yaparsın (iyzico). Kart bilgilerin LezzetHub’da saklanmaz.
         </Text>
+        <ConsentCheck checked={contract} onChange={setContract}>
+          <LegalLink doc="sales" label="Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi" />’ni okudum ve onaylıyorum. Ev yemeklerinde cayma hakkı bulunmadığını biliyorum.
+        </ConsentCheck>
       </Screen>
     </KeyboardAvoidingView>
   );

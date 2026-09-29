@@ -5,7 +5,8 @@ import { Text, View } from 'react-native';
 import { AdminHeader } from '../../components/AdminHeader';
 import { useFeedback } from '../../components/feedback';
 import { Avatar, Badge, Button, Card, EmptyState, Field, LocationBadge, Row, Screen } from '../../components/ui';
-import { matchesText } from '../../lib/hatay';
+import { VERIFICATION_LABEL } from '../../lib/format';
+import { matchesText } from '../../lib/locations';
 import { useStore } from '../../lib/store';
 import { font } from '../../lib/theme';
 
@@ -15,7 +16,7 @@ export default function AdminUsers() {
   const [q, setQ] = useState('');
   if (!me) return null;
 
-  const users = db.users.filter((u) => !q.trim() || matchesText(`${u.name} ${u.email} ${u.district} ${u.neighborhood}`, q));
+  const users = db.users.filter((u) => !q.trim() || matchesText(`${u.name} ${u.email} ${u.province} ${u.district} ${u.neighborhood}`, q));
 
   return (
     <Screen header={<AdminHeader title="Kullanıcı Yönetimi" subtitle={`${db.users.length} kayıtlı kullanıcı`} />}>
@@ -35,10 +36,12 @@ export default function AdminUsers() {
                   {self ? ' (sen)' : ''}
                 </Text>
                 <Text style={font.small}>{u.email}</Text>
-                <LocationBadge district={u.district} neighborhood={u.neighborhood} compact />
+                <LocationBadge province={u.province} district={u.district} neighborhood={u.neighborhood} compact />
                 <Row gap={6} style={{ marginTop: 6, flexWrap: 'wrap' }}>
                   <Badge label={u.role === 'admin' ? 'Admin' : 'Kullanıcı'} tone={u.role === 'admin' ? 'blue' : 'orange'} icon={u.role === 'admin' ? 'shield-checkmark' : 'person'} />
                   <Badge label={u.active ? 'Aktif' : 'Pasif'} tone={u.active ? 'green' : 'gray'} />
+                  {u.sellerStatus !== 'none' && <Badge label={`Satıcı: ${VERIFICATION_LABEL[u.sellerStatus]}`} tone={u.sellerStatus === 'approved' ? 'teal' : u.sellerStatus === 'rejected' ? 'red' : 'yellow'} icon="storefront-outline" />}
+                  {u.courierStatus !== 'none' && <Badge label={`Kurye: ${VERIFICATION_LABEL[u.courierStatus]}`} tone={u.courierStatus === 'approved' ? 'blue' : u.courierStatus === 'rejected' ? 'red' : 'yellow'} icon="bicycle-outline" />}
                   <Badge label={`${listings} ilan · ${orders} sipariş`} tone="gray" />
                 </Row>
               </View>

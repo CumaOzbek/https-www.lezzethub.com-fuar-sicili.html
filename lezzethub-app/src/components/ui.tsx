@@ -367,9 +367,8 @@ export function StatusBadge({ status }: { status: OrderStatus }) {
   const m = STATUS_META[status];
   const icon: Record<OrderStatus, IconName> = {
     seller_pending: 'time-outline',
-    approved: 'thumbs-up-outline',
-    payment_pending: 'hourglass-outline',
-    paid: 'card-outline',
+    approved: 'card-outline',
+    paid: 'checkmark-circle-outline',
     completed: 'checkmark-done',
     rejected: 'close-circle-outline',
     cancelled: 'ban-outline',
@@ -377,12 +376,13 @@ export function StatusBadge({ status }: { status: OrderStatus }) {
   return <Badge label={m.label} tone={m.tone} icon={icon[status]} />;
 }
 
-export function LocationBadge({ district, neighborhood, compact }: { district: string; neighborhood: string; compact?: boolean }) {
+export function LocationBadge({ province, district, neighborhood, compact }: { province?: string; district: string; neighborhood: string; compact?: boolean }) {
   return (
     <View style={[styles.loc, compact && { paddingVertical: 2, paddingHorizontal: 0, backgroundColor: 'transparent' }]}>
       <Text style={{ fontSize: compact ? 11 : 12 }}>📍</Text>
       <Text style={[styles.locText, compact && { fontSize: 12 }]} numberOfLines={1}>
         {neighborhood}, {district}
+        {province ? ` / ${province}` : ''}
       </Text>
     </View>
   );

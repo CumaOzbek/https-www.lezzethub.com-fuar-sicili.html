@@ -6,7 +6,6 @@ import { AdminHeader } from '../../components/AdminHeader';
 import { Card, Row, Screen, SectionTitle, StatCard, StatusBadge } from '../../components/ui';
 import { adminStats } from '../../lib/api';
 import { BUYER_FEE_RATE, SELLER_FEE_RATE } from '../../lib/commission';
-import { DISTRICTS } from '../../lib/hatay';
 import { STATUS_META, timeAgo, tl } from '../../lib/format';
 import { useStore } from '../../lib/store';
 import { colors, font } from '../../lib/theme';
@@ -22,22 +21,39 @@ export default function AdminStats() {
     return m;
   }, [db.orders]);
 
+  // En çok ilanı olan 10 il.
   const byDistrict = useMemo(() => {
-    const counts = DISTRICTS.map((d) => ({ d, n: db.listings.filter((l) => l.district === d && l.status === 'active').length })).filter((x) => x.n > 0);
-    return counts.sort((a, b) => b.n - a.n);
+    const m = new Map<string, number>();
+    db.listings.filter((l) => l.status === 'active').forEach((l) => m.set(l.province, (m.get(l.province) ?? 0) + 1));
+    return [...m.entries()].map(([d, n]) => ({ d, n })).sort((a, b) => b.n - a.n).slice(0, 10);
   }, [db.listings]);
   const maxD = Math.max(1, ...byDistrict.map((x) => x.n));
 
   return (
-    <Screen header={<AdminHeader title="Yönetim Paneli" subtitle="Hatay geneli platform istatistikleri" />}>
+    <Screen header={<AdminHeader title="Yönetim Paneli" subtitle="Türkiye geneli platform istatistikleri" />}>
       <View style={styles.grid}>
         <StatCard label={`Kullanıcı · ${s.activeUsers} aktif`} value={s.users} icon="people-outline" tone="blue" onPress={() => router.navigate('/admin/users')} />
         <StatCard label={`İlan · ${s.activeListings} yayında`} value={s.listings} icon="restaurant-outline" tone="orange" onPress={() => router.navigate('/admin/listings')} />
       </View>
       <View style={styles.grid}>
-        <StatCard label="Bekleyen ödeme" value={s.pendingPayments} icon="hourglass-outline" tone="yellow" onPress={() => router.navigate('/admin/payments')} />
+        <StatCard label="Onay bekleyen başvuru" value={s.pendingVerifications} icon="document-text-outline" tone="yellow" onPress={() => router.navigate('/admin/verifications')} />
         <StatCard label={`Sipariş · ${s.completedOrders} tamamlandı`} value={s.orders} icon="receipt-outline" tone="green" />
       </View>
+      <View style={styles.grid}>
+        <StatCard label="Onaylı satıcı" value={s.sellers} icon="storefront-outline" tone="teal" />
+        <StatCard label="Onaylı kurye" value={s.couriers} icon="bicycle-outline" tone="blue" />
+      </View>
+      {s.payoutDueCount > 0 && (
+        <Card style={{ marginTop: 12, backgroundColor: colors.honeySoft }} onPress={() => router.navigate('/admin/payments')}>
+          <Row gap={10}>
+            <Text style={{ fontSize: 22 }}>💸</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[font.h3, { color: colors.warning }]}>Satıcılara {tl(s.payoutDue)} aktarılacak</Text>
+              <Text style={font.small}>{s.payoutDueCount} tamamlanmış siparişin satıcı ödemesi bekliyor.</Text>
+            </View>
+          </Row>
+        </Card>
+      )}
       {s.openReports > 0 && (
         <Card style={{ marginTop: 12, backgroundColor: colors.dangerBg }} onPress={() => router.navigate('/admin/reports')}>
           <Row gap={10}>
@@ -63,7 +79,7 @@ export default function AdminStats() {
             <Text style={styles.revValue}>{tl(s.sellerFees)}</Text>
           </View>
         </View>
-        <Text style={{ color: colors.muted, fontSize: 12, marginTop: 10 }}>Ödemesi onaylanmış siparişlerden · İşlem hacmi {tl(s.grossVolume)}</Text>
+        <Text style={{ color: colors.muted, fontSize: 12, marginTop: 10 }}>Online ödemesi alınmış siparişlerden · İşlem hacmi {tl(s.grossVolume)}</Text>
       </Card>
 
       <SectionTitle title="Sipariş durumları" />
@@ -76,7 +92,7 @@ export default function AdminStats() {
         ))}
       </Card>
 
-      <SectionTitle title="İlçelere göre yayındaki ilanlar" />
+      <SectionTitle title="İllere göre yayındaki ilanlar (ilk 10)" />
       <Card>
         {byDistrict.length === 0 && <Text style={font.small}>Henüz ilan yok.</Text>}
         {byDistrict.map(({ d, n }) => (

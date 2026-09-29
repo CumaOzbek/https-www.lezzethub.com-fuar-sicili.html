@@ -8,7 +8,7 @@
 do $$
 declare t text;
 begin
-  foreach t in array array['listings','orders','messages','payments','notifications','reports','profiles'] loop
+  foreach t in array array['listings','orders','messages','payments','notifications','reports','profiles','verifications','courier_profiles'] loop
     if not exists (
       select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
     ) then

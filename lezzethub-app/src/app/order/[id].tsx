@@ -1,23 +1,34 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { ListingImage, LoginRequired, PriceBreakdown } from '../../components/domain';
 import { useFeedback } from '../../components/feedback';
-import { Avatar, Button, Card, EmptyState, Header, InfoRow, LocationBadge, Notice, Row, Screen, StatusBadge } from '../../components/ui';
+import { Avatar, Badge, Button, Card, EmptyState, Field, Header, InfoRow, LocationBadge, Notice, Row, Screen, StatusBadge } from '../../components/ui';
 import * as api from '../../lib/api';
 import { calcBreakdown } from '../../lib/commission';
-import { DELIVERY_LABEL, ORDER_FLOW, STATUS_META, appointmentText, chatTime } from '../../lib/format';
+import { DELIVERY_LABEL, ORDER_FLOW, STATUS_META, appointmentText, chatTime, shippingPayerText, tl } from '../../lib/format';
 import { useStore } from '../../lib/store';
 import { colors, font } from '../../lib/theme';
 
-const STEP_LABELS = ['Satıcı onayı', 'Onaylandı', 'Ödeme onayı', 'Ödendi', 'Tamamlandı'];
+const STEP_LABELS = ['Sipariş verildi', 'Satıcı onayladı', 'Ödendi', 'Tamamlandı'];
+
+const PAYMENT_STATUS: Record<string, { label: string; tone: 'green' | 'red' | 'yellow' | 'gray' }> = {
+  pending: { label: 'Bekliyor', tone: 'yellow' },
+  succeeded: { label: 'Başarılı', tone: 'green' },
+  failed: { label: 'Başarısız', tone: 'red' },
+  refunded: { label: 'İade edildi', tone: 'gray' },
+};
 
 export default function OrderDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { db, me, actions: backend } = useStore();
   const { run, confirm } = useFeedback();
   const order = db.orders.find((o) => o.id === id);
+  const [company, setCompany] = useState(order?.shippingCompany ?? '');
+  const [tracking, setTracking] = useState(order?.trackingCode ?? '');
+  const [savingShipment, setSavingShipment] = useState(false);
 
   if (!me) {
     return (
@@ -50,7 +61,27 @@ export default function OrderDetail() {
   const stepIdx = ORDER_FLOW.indexOf(order.status);
   const lastGood = closed ? ORDER_FLOW.indexOf([...order.history].reverse().find((h) => ORDER_FLOW.includes(h.status))?.status ?? 'seller_pending') : stepIdx;
   const b = calcBreakdown(order.unitPrice, order.quantity);
-  const confirmedStage = ['approved', 'payment_pending', 'paid', 'completed'].includes(order.status);
+  const confirmedStage = ['approved', 'paid', 'completed'].includes(order.status);
+  const payments = db.payments.filter((p) => p.orderId === order.id);
+  const canPay = api.canPay(order, me);
+  const shipsToAddress = order.delivery !== 'pickup';
+
+  const saveShipment = async () => {
+    setSavingShipment(true);
+    await run(() => backend.setShipment(order.id, company, tracking), 'Kargo bilgisi alıcıya iletildi 📦');
+    setSavingShipment(false);
+  };
+
+  const refund = async () => {
+    const r = await confirm({
+      title: 'Siparişi iptal et ve iade yap',
+      message: `${tl(order.buyerTotal)} alıcının kartına iade edilecek ve sipariş iptal edilecek.`,
+      confirmText: 'İade Et',
+      destructive: true,
+      inputPlaceholder: 'İade gerekçesi (taraflara iletilir)',
+    });
+    if (r.ok) await run(() => backend.adminRefundOrder(order.id, r.note), 'Ödeme iade edildi');
+  };
 
   const act = async (action: api.OrderAction, opts: { title: string; message: string; confirmText: string; destructive?: boolean; note?: string; success: string }) => {
     const r = await confirm({ title: opts.title, message: opts.message, confirmText: opts.confirmText, destructive: opts.destructive, inputPlaceholder: opts.note });
@@ -90,33 +121,25 @@ export default function OrderDetail() {
         {closed && (
           <Notice tone={order.status === 'rejected' ? 'red' : 'gray'} icon={order.status === 'rejected' ? 'close-circle-outline' : 'ban-outline'} title={STATUS_META[order.status].label} text={order.statusNote ?? ''} />
         )}
-        {order.status === 'payment_pending' && perspective !== 'admin' && (
-          <Notice tone="yellow" icon="hourglass-outline" text="Ödeme yönetici onayı bekliyor. Onaylandığında bildirim alacaksın." />
-        )}
-        {order.status === 'approved' && isBuyer && <Notice tone="blue" icon="card-outline" text="Satıcı siparişini onayladı! Ödemeyi başlatarak siparişi kesinleştir." />}
+        {order.status === 'approved' && isBuyer && <Notice tone="blue" icon="card-outline" text="Satıcı siparişini onayladı! Kartınla online ödeme yaparak siparişi kesinleştir." />}
+        {order.status === 'approved' && isSeller && <Notice tone="blue" icon="hourglass-outline" text="Alıcının online ödemesi bekleniyor. Ödeme alınmadan hazırlığa başlama." />}
+        {order.status === 'paid' && isSeller && <Notice tone="green" icon="checkmark-circle-outline" text="Ödeme alındı. Randevu saatine göre hazırlığa başlayabilirsin." />}
         {order.status === 'seller_pending' && isSeller && <Notice tone="yellow" icon="notifications-outline" text="Yeni sipariş talebi! Onaylamadan önce randevu saatine uygun olduğundan emin ol." />}
       </Card>
 
-      {actions.length > 0 && (
+      {(actions.length > 0 || canPay) && (
         <View style={{ gap: 10, marginTop: 14 }}>
           {actions.includes('approve') && (
             <Button title="Siparişi Onayla" icon="checkmark-circle" variant="success" onPress={() => act('approve', { title: 'Siparişi onayla', message: `${order.quantity} adet “${order.listingTitle}” — ${appointmentText(order.appointment)}`, confirmText: 'Onayla', success: 'Sipariş onaylandı' })} />
           )}
-          {actions.includes('pay') && (
-            <Button title="Ödeme Yap" icon="card" onPress={() => act('pay', { title: 'Ödemeyi başlat', message: `Toplam ${order.buyerTotal.toLocaleString('tr-TR')} ₺ tutarındaki ödemen yönetici onayına gönderilecek.`, confirmText: 'Ödemeyi Başlat', success: 'Ödeme admin onayına gönderildi' })} />
-          )}
-          {actions.includes('paymentApprove') && (
-            <Button title="Ödemeyi Onayla" icon="shield-checkmark" variant="success" onPress={() => act('paymentApprove', { title: 'Ödemeyi onayla', message: `${order.code} için ödeme onaylanacak.`, confirmText: 'Onayla', success: 'Ödeme onaylandı' })} />
-          )}
+          {canPay && <Button title={`Online Öde · ${tl(order.buyerTotal)}`} icon="card" onPress={() => router.push(`/pay/${order.id}`)} />}
+          {actions.includes('refund') && <Button title="İptal et ve karta iade yap" icon="return-down-back-outline" variant="danger" onPress={refund} />}
           {actions.includes('complete') && (
             <Button title="Teslim Edildi · Tamamlandı" icon="checkmark-done" variant="success" onPress={() => act('complete', { title: 'Siparişi tamamla', message: 'Teslimat yapıldıysa siparişi tamamlandı olarak işaretle.', confirmText: 'Tamamlandı', success: 'Sipariş tamamlandı 🧡' })} />
           )}
           <Row gap={10}>
             {actions.includes('reject') && (
               <Button title="Reddet" icon="close" variant="danger" style={{ flex: 1 }} onPress={() => act('reject', { title: 'Siparişi reddet', message: 'Alıcıya bildirim gönderilecek.', confirmText: 'Reddet', destructive: true, note: 'Red gerekçesi (isteğe bağlı)', success: 'Sipariş reddedildi' })} />
-            )}
-            {actions.includes('paymentReject') && (
-              <Button title="Ödemeyi Reddet" icon="close" variant="danger" style={{ flex: 1 }} onPress={() => act('paymentReject', { title: 'Ödemeyi reddet', message: 'Sipariş reddedildi olarak işaretlenecek.', confirmText: 'Reddet', destructive: true, note: 'Red gerekçesi (isteğe bağlı)', success: 'Ödeme reddedildi' })} />
             )}
             {actions.includes('cancel') && (
               <Button title="İptal Et" icon="ban-outline" variant="outline" style={{ flex: 1 }} onPress={() => act('cancel', { title: 'Siparişi iptal et', message: 'Bu işlem geri alınamaz.', confirmText: 'İptal Et', destructive: true, note: 'İptal nedeni (isteğe bağlı)', success: 'Sipariş iptal edildi' })} />
@@ -145,8 +168,8 @@ export default function OrderDetail() {
       {perspective === 'admin' ? (
         <Card style={{ marginTop: 14 }}>
           <Text style={[font.h3, { marginBottom: 8 }]}>Taraflar</Text>
-          <InfoRow icon="bag-handle-outline" label="Alıcı" value={buyer ? `${buyer.name} · ${buyer.neighborhood}, ${buyer.district}` : '—'} />
-          <InfoRow icon="storefront-outline" label="Satıcı" value={seller ? `${seller.name} · ${seller.neighborhood}, ${seller.district}` : '—'} />
+          <InfoRow icon="bag-handle-outline" label="Alıcı" value={buyer ? `${buyer.name} · ${buyer.neighborhood}, ${buyer.district}/${buyer.province}` : '—'} />
+          <InfoRow icon="storefront-outline" label="Satıcı" value={seller ? `${seller.name} · ${seller.neighborhood}, ${seller.district}/${seller.province}` : '—'} />
         </Card>
       ) : (
         other && (
@@ -156,7 +179,7 @@ export default function OrderDetail() {
               <View style={{ flex: 1 }}>
                 <Text style={font.tiny}>{isBuyer ? 'Satıcı' : 'Alıcı'}</Text>
                 <Text style={font.h3}>{other.name}</Text>
-                <LocationBadge district={other.district} neighborhood={other.neighborhood} compact />
+                <LocationBadge province={other.province} district={other.district} neighborhood={other.neighborhood} compact />
               </View>
             </Row>
             <Button title={unread ? `Mesajlar (${unread} yeni)` : 'Mesajlaş'} icon="chatbubbles-outline" variant="secondary" onPress={() => router.push(`/chat/${order.id}`)} style={{ marginTop: 12 }} />
@@ -167,8 +190,16 @@ export default function OrderDetail() {
       <Card style={{ marginTop: 14 }}>
         <Text style={[font.h3, { marginBottom: 4 }]}>Randevu & teslimat</Text>
         <InfoRow icon="calendar-outline" label="Randevu" value={appointmentText(order.appointment)} />
-        <InfoRow icon={order.delivery === 'courier' ? 'bicycle' : 'hand-left-outline'} label="Teslimat yöntemi" value={DELIVERY_LABEL[order.delivery]} />
-        {order.delivery === 'courier' && <InfoRow icon="location-outline" label="Teslimat adresi (alıcı)" value={order.address} />}
+        <InfoRow icon={order.delivery === 'courier' ? 'bicycle' : order.delivery === 'cargo' ? 'cube-outline' : 'hand-left-outline'} label="Teslimat yöntemi" value={DELIVERY_LABEL[order.delivery]} />
+        {shipsToAddress && <InfoRow icon="location-outline" label="Teslimat adresi (alıcı)" value={order.address} />}
+        {shipsToAddress && <InfoRow icon={order.shippingPayer === 'seller' ? 'gift-outline' : 'wallet-outline'} label="Gönderim ücreti" value={shippingPayerText(order.delivery, order.shippingPayer)} />}
+        {order.delivery === 'cargo' && (
+          <InfoRow
+            icon="barcode-outline"
+            label="Kargo takip"
+            value={order.trackingCode ? `${order.shippingCompany} · ${order.trackingCode}` : order.status === 'paid' ? 'Satıcı kargoya verdiğinde burada görünecek' : undefined}
+          />
+        )}
         {order.delivery === 'pickup' && (
           <InfoRow
             icon="location-outline"
@@ -181,7 +212,57 @@ export default function OrderDetail() {
           />
         )}
         {!!order.note && <InfoRow icon="document-text-outline" label="Not" value={order.note} />}
+        {order.delivery === 'courier' && (isBuyer || isSeller) && (order.status === 'approved' || order.status === 'paid') && (
+          <Button
+            title="Yakındaki kuryeleri gör"
+            icon="bicycle-outline"
+            variant="secondary"
+            small
+            onPress={() => router.push('/couriers')}
+            style={{ marginTop: 8, alignSelf: 'flex-start' }}
+          />
+        )}
       </Card>
+
+      {order.delivery === 'cargo' && isSeller && order.status === 'paid' && (
+        <Card style={{ marginTop: 14 }}>
+          <Text style={[font.h3, { marginBottom: 4 }]}>📦 Kargo bilgisi</Text>
+          <Text style={[font.small, { marginBottom: 12 }]}>
+            {order.shippingPayer === 'seller' ? 'Kargo ücreti sende. ' : 'Kargo ücreti alıcıda (karşı ödemeli gönderebilirsin). '}
+            Kargoya verdikten sonra firma ve takip numarasını gir; alıcıya bildirim gider.
+          </Text>
+          <Field label="Kargo firması" icon="business-outline" value={company} onChangeText={setCompany} placeholder="Ör. Yurtiçi, Aras, MNG, PTT" />
+          <Field label="Takip numarası" icon="barcode-outline" value={tracking} onChangeText={setTracking} autoCapitalize="characters" />
+          <Button title={order.trackingCode ? 'Kargo bilgisini güncelle' : 'Kargoya verdim'} icon="send-outline" onPress={saveShipment} loading={savingShipment} />
+        </Card>
+      )}
+
+      {payments.length > 0 && (
+        <Card style={{ marginTop: 14 }}>
+          <Text style={[font.h3, { marginBottom: 6 }]}>Ödeme</Text>
+          {payments.map((p) => (
+            <Row key={p.id} style={{ justifyContent: 'space-between', paddingVertical: 6 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '700', color: colors.ink }}>
+                  {tl(p.amount)} · {p.cardAssociation ? p.cardAssociation.replace('_', ' ') : 'Kart'}
+                  {p.cardLast4 ? ` •••• ${p.cardLast4}` : ''}
+                </Text>
+                <Text style={font.small}>
+                  {chatTime(p.paidAt ?? p.createdAt)} · {p.provider === 'test' ? 'Test ödemesi (demo)' : 'iyzico'}
+                  {p.errorMessage && p.status === 'failed' ? ` · ${p.errorMessage}` : ''}
+                  {p.refundNote && p.status === 'refunded' ? ` · ${p.refundNote}` : ''}
+                </Text>
+              </View>
+              <Badge label={PAYMENT_STATUS[p.status]!.label} tone={PAYMENT_STATUS[p.status]!.tone} />
+            </Row>
+          ))}
+          {order.status === 'completed' && (isSeller || perspective === 'admin') && (
+            <Text style={[font.small, { marginTop: 6 }]}>
+              Satıcı ödemesi: {order.payoutStatus === 'paid' ? `IBAN’a aktarıldı (${chatTime(order.payoutAt!)})` : 'Aktarım bekliyor (tamamlanan siparişler düzenli olarak ödenir)'}
+            </Text>
+          )}
+        </Card>
+      )}
 
       <Text style={[font.h3, { marginTop: 20, marginBottom: 10 }]}>Hesap dökümü</Text>
       <PriceBreakdown b={b} unitPrice={order.unitPrice} quantity={order.quantity} perspective={perspective} />

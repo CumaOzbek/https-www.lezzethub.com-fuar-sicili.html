@@ -11,7 +11,7 @@ import type { OrderStatus } from '../../lib/types';
 type Filter = 'all' | 'active' | 'done' | 'closed';
 const FILTERS: { key: Filter; label: string; statuses?: OrderStatus[] }[] = [
   { key: 'all', label: 'Tümü' },
-  { key: 'active', label: 'Devam eden', statuses: ['seller_pending', 'approved', 'payment_pending', 'paid'] },
+  { key: 'active', label: 'Devam eden', statuses: ['seller_pending', 'approved', 'paid'] },
   { key: 'done', label: 'Tamamlanan', statuses: ['completed'] },
   { key: 'closed', label: 'İptal / Red', statuses: ['rejected', 'cancelled'] },
 ];

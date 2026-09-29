@@ -1,4 +1,4 @@
-import type { DeliveryMethod, OrderStatus } from './types';
+import type { DeliveryMethod, LicenseClass, OrderStatus, ShippingPayer, VerificationStatus } from './types';
 
 export function tl(n: number) {
   return (
@@ -49,21 +49,47 @@ export function chatTime(iso: string) {
 }
 
 export const DELIVERY_LABEL: Record<DeliveryMethod, string> = {
-  courier: 'Kurye',
   pickup: 'Elden Teslim',
+  courier: 'Kurye',
+  cargo: 'Kargo',
+};
+
+export const SHIPPING_PAYER_LABEL: Record<ShippingPayer, string> = {
+  buyer: 'Alıcı öder',
+  seller: 'Satıcı öder',
+};
+
+/** Teslimat ücreti sorumluluğunu açıklayan cümle. */
+export function shippingPayerText(method: DeliveryMethod, payer: ShippingPayer) {
+  if (method === 'pickup') return 'Alıcı ürünü satıcının adresinden teslim alır.';
+  const what = method === 'cargo' ? 'Kargo' : 'Kurye';
+  return payer === 'seller'
+    ? `${what} ücretini ve gönderimi satıcı üstlenir; alıcı ek ücret ödemez.`
+    : `${what} ücretini alıcı öder; ücret online ödemeye dahil değildir ve ${method === 'cargo' ? 'kargo firmasına' : 'kuryeye'} ödenir.`;
+}
+
+export const LICENSE_LABEL: Record<LicenseClass, string> = {
+  A2: 'A2 sınıfı (motosiklet)',
+  B: 'B sınıfı (otomobil)',
+};
+
+export const VERIFICATION_LABEL: Record<VerificationStatus, string> = {
+  none: 'Başvuru yok',
+  pending: 'İnceleniyor',
+  approved: 'Onaylı',
+  rejected: 'Reddedildi',
 };
 
 export const STATUS_META: Record<OrderStatus, { label: string; tone: 'yellow' | 'blue' | 'green' | 'red' | 'gray' }> = {
   seller_pending: { label: 'Satıcı Onayı Bekliyor', tone: 'yellow' },
-  approved: { label: 'Onaylandı', tone: 'blue' },
-  payment_pending: { label: 'Ödeme Admin Onayı Bekliyor', tone: 'yellow' },
-  paid: { label: 'Ödeme Onaylandı', tone: 'green' },
+  approved: { label: 'Ödeme Bekleniyor', tone: 'blue' },
+  paid: { label: 'Ödendi · Hazırlanıyor', tone: 'green' },
   completed: { label: 'Tamamlandı', tone: 'green' },
   rejected: { label: 'Reddedildi', tone: 'red' },
   cancelled: { label: 'İptal Edildi', tone: 'gray' },
 };
 
-export const ORDER_FLOW: OrderStatus[] = ['seller_pending', 'approved', 'payment_pending', 'paid', 'completed'];
+export const ORDER_FLOW: OrderStatus[] = ['seller_pending', 'approved', 'paid', 'completed'];
 
 export function initials(name: string) {
   return name

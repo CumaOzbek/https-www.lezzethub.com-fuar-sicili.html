@@ -4,9 +4,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 
 import * as api from '../api';
+import { persistLocalDocument } from '../documents';
 import { persistLocalPhoto } from '../photos';
 import { DB_VERSION, createSeed } from '../seed';
-import type { DB, User } from '../types';
+import type { DB, User, Verification } from '../types';
 import type { Backend, ProfileUpdate, RegisterResult } from './types';
 
 const DB_KEY = 'lezzethub.db';
@@ -17,27 +18,20 @@ export const hashPassword = (password: string) =>
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
-/** Eski sürüm verilerini güncel yapıya taşır; taşınamıyorsa null döner. */
+/** Kayıtlı veri güncel sürümdeyse döner; eski sürüm (ör. yalnızca Hatay) verileri demo için yeniden oluşturulur. */
 function migrate(raw: unknown): DB | null {
-  type LegacyListing = Omit<DB['listings'][number], 'images'> & { images?: string[]; image?: string };
-  const d = raw as Omit<Partial<DB>, 'listings'> & { version?: number; listings?: LegacyListing[] };
-  if (!d || typeof d !== 'object' || !Array.isArray(d.users)) return null;
-  if (d.version === DB_VERSION) return d as unknown as DB;
-  if (d.version === 1) {
-    return {
-      ...(d as unknown as DB),
-      version: DB_VERSION,
-      listings: (d.listings ?? []).map(({ image, ...l }) => ({ ...l, images: l.images ?? (image ? [image] : []) })),
-      reports: [],
-      blocks: [],
-    };
-  }
-  return null;
+  const d = raw as Partial<DB> | null;
+  if (!d || typeof d !== 'object' || !Array.isArray(d.users) || d.version !== DB_VERSION) return null;
+  return d as DB;
 }
+
+const emptyDb = (): DB => ({
+  version: DB_VERSION, users: [], listings: [], orders: [], messages: [], payments: [], notifications: [], reports: [], blocks: [], verifications: [], couriers: [],
+});
 
 export class LocalBackend implements Backend {
   readonly mode = 'local' as const;
-  private db: DB = { version: DB_VERSION, users: [], listings: [], orders: [], messages: [], payments: [], notifications: [], reports: [], blocks: [] };
+  private db: DB = emptyDb();
   private session: string | null = null;
   private listeners = new Set<() => void>();
 
@@ -157,6 +151,31 @@ export class LocalBackend implements Backend {
     this.mutate((d) => api.updateProfile(d, me.id, { ...input, avatar }));
   }
 
+  /* ---------- Satıcı ve kurye başvuruları ---------- */
+
+  async submitSellerApplication(input: api.SellerApplicationInput) {
+    const me = this.me();
+    api.validateSellerApplication(input);
+    const docUri = await persistLocalDocument(input.docUri, input.docType);
+    this.mutate((d) => api.submitSellerApplication(d, me.id, { ...input, docUri }));
+  }
+
+  async submitCourierApplication(input: api.CourierApplicationInput) {
+    const me = this.me();
+    api.validateCourierApplication(input);
+    const docUri = await persistLocalDocument(input.docUri, input.docType);
+    this.mutate((d) => api.submitCourierApplication(d, me.id, { ...input, docUri }));
+  }
+
+  async updateCourierProfile(patch: api.CourierUpdate) {
+    const me = this.me();
+    this.mutate((d) => api.updateCourierProfile(d, me.id, patch));
+  }
+
+  async documentUrl(v: Verification) {
+    return v.docUri;
+  }
+
   /* ---------- İlanlar ---------- */
 
   async saveListing(input: api.ListingInput, listingId?: string) {
@@ -186,6 +205,27 @@ export class LocalBackend implements Backend {
   async orderAction(orderId: string, action: api.OrderAction, note?: string) {
     const me = this.me();
     this.mutate((d) => api.orderAction(d, me, orderId, action, note));
+  }
+
+  async setShipment(orderId: string, company: string, trackingCode: string) {
+    const me = this.me();
+    this.mutate((d) => api.setShipment(d, me, orderId, company, trackingCode));
+  }
+
+  async payWithTestCard(orderId: string, card: api.TestCardInput) {
+    const me = this.me();
+    // Reddedilen ödeme de kayda geçsin: kart reddedildiğinde kayıt eklenmiş taslak saklanır, hata sonra fırlatılır.
+    let error: unknown = null;
+    this.mutate((d) => {
+      const before = d.payments.length;
+      try {
+        api.payWithTestCard(d, me.id, orderId, card);
+      } catch (e) {
+        if (d.payments.length === before) throw e;
+        error = e;
+      }
+    });
+    if (error) throw error;
   }
 
   async sendMessage(orderId: string, text: string) {
@@ -244,6 +284,21 @@ export class LocalBackend implements Backend {
   async adminResolveReport(reportId: string) {
     const me = this.me();
     this.mutate((d) => api.resolveReport(d, me, reportId));
+  }
+
+  async adminReviewVerification(verificationId: string, approve: boolean, note: string) {
+    const me = this.me();
+    this.mutate((d) => api.reviewVerification(d, me, verificationId, approve, note));
+  }
+
+  async adminRefundOrder(orderId: string, note: string) {
+    const me = this.me();
+    this.mutate((d) => api.orderAction(d, me, orderId, 'refund', note));
+  }
+
+  async adminMarkPayout(orderIds: string[]) {
+    const me = this.me();
+    this.mutate((d) => api.markPayout(d, me, orderIds));
   }
 
   async resetDemo() {

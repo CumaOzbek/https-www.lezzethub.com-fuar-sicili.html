@@ -1,16 +1,17 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { FlatList, Image, Modal, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BUYER_FEE_RATE, SELLER_FEE_RATE, type Breakdown } from '../lib/commission';
 import { DELIVERY_LABEL, appointmentText, tl } from '../lib/format';
-import { ALL_HATAY, DISTRICTS, suggestNeighborhoods } from '../lib/hatay';
+import { ALL_DISTRICTS, ALL_TURKEY, PROVINCES, districtsOf, matchesText, suggestNeighborhoods, useNeighbourhoods } from '../lib/locations';
+import type { LegalKey } from '../lib/legal';
 import { useStore } from '../lib/store';
 import { colors, font, radius, shadowSoft } from '../lib/theme';
 import { CATEGORIES, type DeliveryMethod, type Listing, type Order, type User } from '../lib/types';
-import { Avatar, Badge, Card, EmptyState, Field, LocationBadge, Row, StatusBadge } from './ui';
+import { Avatar, Badge, Card, EmptyState, Field, LocationBadge, Row, StatusBadge, type IconName } from './ui';
 
 export const categoryOf = (key: string) => CATEGORIES.find((c) => c.key === key) ?? CATEGORIES[CATEGORIES.length - 1]!;
 
@@ -38,6 +39,7 @@ export function ListingImage({ listing, height = 170, style }: { listing: ImageS
 export function DeliveryIcons({ delivery, labels = false }: { delivery: DeliveryMethod[]; labels?: boolean }) {
   return (
     <Row gap={6}>
+      {delivery.includes('cargo') && <Badge label={labels ? 'Kargo' : '📦'} tone="honey" icon={labels ? 'cube-outline' : undefined} />}
       {delivery.includes('courier') && <Badge label={labels ? 'Kurye' : '🛵'} tone="blue" icon={labels ? 'bicycle' : undefined} />}
       {delivery.includes('pickup') && <Badge label={labels ? 'Elden Teslim' : '🤝'} tone="green" icon={labels ? 'hand-left-outline' : undefined} />}
     </Row>
@@ -87,7 +89,7 @@ export function ListingCard({ listing, seller, compact }: { listing: Listing; se
                   {seller.name}
                 </Text>
               )}
-              <LocationBadge district={listing.district} neighborhood={listing.neighborhood} compact />
+              <LocationBadge province={listing.province} district={listing.district} neighborhood={listing.neighborhood} compact />
             </View>
           </Row>
           <DeliveryIcons delivery={listing.delivery} />
@@ -97,10 +99,108 @@ export function ListingCard({ listing, seller, compact }: { listing: Listing; se
   );
 }
 
-/* ------------------------------ İlçe / Mahalle ------------------------------ */
+/* ------------------------------ İl / İlçe / Mahalle ------------------------------ */
 
-export function DistrictPicker({
-  label = 'İlçe',
+/** Aranabilir seçim listesi (alttan açılan sayfa). */
+function PickerSheet({
+  visible,
+  title,
+  subtitle,
+  items,
+  value,
+  multi,
+  selected,
+  onPick,
+  onClose,
+  searchable,
+  iconFor,
+}: {
+  visible: boolean;
+  title: string;
+  subtitle?: string;
+  items: string[];
+  value?: string;
+  multi?: boolean;
+  selected?: string[];
+  onPick: (item: string) => void;
+  onClose: () => void;
+  searchable?: boolean;
+  iconFor?: (item: string) => string;
+}) {
+  const insets = useSafeAreaInsets();
+  const [q, setQ] = useState('');
+  const shown = useMemo(() => (q.trim() ? items.filter((i) => matchesText(i, q)) : items), [items, q]);
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.sheetBackdrop} onPress={onClose} />
+      <View style={[styles.sheet, { paddingBottom: insets.bottom + 12 }]}>
+        <View style={styles.sheetHandle} />
+        <Row style={{ justifyContent: 'space-between', marginBottom: 4 }}>
+          <Text style={font.h2}>{title}</Text>
+          {multi && (
+            <Pressable onPress={onClose} hitSlop={8}>
+              <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 16 }}>Tamam</Text>
+            </Pressable>
+          )}
+        </Row>
+        {!!subtitle && <Text style={[font.small, { marginBottom: 10 }]}>{subtitle}</Text>}
+        {searchable && <Field icon="search" value={q} onChangeText={setQ} placeholder="Ara…" autoCorrect={false} style={{ marginBottom: 8 }} />}
+        <FlatList
+          data={shown}
+          keyExtractor={(x) => x}
+          style={{ maxHeight: 420 }}
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={<Text style={[font.small, { padding: 14 }]}>Sonuç bulunamadı.</Text>}
+          renderItem={({ item }) => {
+            const active = multi ? !!selected?.includes(item) : item === value;
+            return (
+              <Pressable
+                onPress={() => {
+                  onPick(item);
+                  if (!multi) {
+                    setQ('');
+                    onClose();
+                  }
+                }}
+                style={[styles.sheetItem, active && { backgroundColor: colors.creamDeep }]}
+                accessibilityRole={multi ? 'checkbox' : 'button'}
+                accessibilityState={multi ? { checked: active } : { selected: active }}
+              >
+                <Text style={{ fontSize: 16, fontWeight: active ? '800' : '500', color: active ? colors.primaryDark : colors.ink, flex: 1 }}>
+                  {iconFor ? iconFor(item) + '  ' : ''}
+                  {item}
+                </Text>
+                {active && <Ionicons name={multi ? 'checkbox' : 'checkmark-circle'} size={20} color={colors.primary} />}
+                {multi && !active && <Ionicons name="square-outline" size={20} color={colors.muted} />}
+              </Pressable>
+            );
+          }}
+        />
+      </View>
+    </Modal>
+  );
+}
+
+function SelectBox({ label, value, placeholder, icon, error, disabled, onPress }: { label?: string; value: string; placeholder: string; icon: IconName; error?: string; disabled?: boolean; onPress: () => void }) {
+  return (
+    <View style={{ marginBottom: 14 }}>
+      {!!label && <Text style={styles.label}>{label}</Text>}
+      <Pressable onPress={disabled ? undefined : onPress} style={[styles.select, !!error && { borderColor: colors.danger }, disabled && { opacity: 0.55 }]} accessibilityRole="button" accessibilityLabel={label}>
+        <Ionicons name={icon} size={18} color={colors.muted} />
+        <Text style={{ flex: 1, fontSize: 15, color: value ? colors.ink : colors.muted }} numberOfLines={1}>
+          {value || placeholder}
+        </Text>
+        <Ionicons name="chevron-down" size={18} color={colors.muted} />
+      </Pressable>
+      {!!error && <Text style={styles.error}>{error}</Text>}
+    </View>
+  );
+}
+
+const PROVINCE_NAMES = PROVINCES.map((p) => p.name);
+
+export function ProvincePicker({
+  label = 'İl',
   value,
   onChange,
   includeAll,
@@ -108,58 +208,120 @@ export function DistrictPicker({
 }: {
   label?: string;
   value: string;
-  onChange: (d: string) => void;
+  onChange: (p: string) => void;
+  /** Filtrelerde "Türkiye Geneli" seçeneği. */
   includeAll?: boolean;
   error?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const insets = useSafeAreaInsets();
-  const items = includeAll ? [ALL_HATAY, ...DISTRICTS] : [...DISTRICTS];
+  const items = includeAll ? [ALL_TURKEY, ...PROVINCE_NAMES] : PROVINCE_NAMES;
   return (
-    <View style={{ marginBottom: 14 }}>
-      {!!label && <Text style={styles.label}>{label}</Text>}
-      <Pressable onPress={() => setOpen(true)} style={[styles.select, !!error && { borderColor: colors.danger }]} accessibilityRole="button">
-        <Ionicons name="map-outline" size={18} color={colors.muted} />
-        <Text style={{ flex: 1, fontSize: 15, color: value ? colors.ink : colors.muted }}>{value || 'İlçe seçin'}</Text>
-        <Ionicons name="chevron-down" size={18} color={colors.muted} />
-      </Pressable>
-      {!!error && <Text style={styles.error}>{error}</Text>}
-      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.sheetBackdrop} onPress={() => setOpen(false)} />
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + 12 }]}>
-          <View style={styles.sheetHandle} />
-          <Text style={[font.h2, { marginBottom: 4 }]}>Hatay · İlçe seçin</Text>
-          <Text style={[font.small, { marginBottom: 12 }]}>LezzetHub yalnızca Hatay ilinde hizmet verir.</Text>
-          <FlatList
-            data={items}
-            keyExtractor={(x) => x}
-            style={{ maxHeight: 440 }}
-            renderItem={({ item }) => {
-              const active = item === value;
-              return (
-                <Pressable
-                  onPress={() => {
-                    onChange(item);
-                    setOpen(false);
-                  }}
-                  style={[styles.sheetItem, active && { backgroundColor: colors.creamDeep }]}
-                >
-                  <Text style={{ fontSize: 16, fontWeight: active ? '800' : '500', color: active ? colors.primaryDark : colors.ink }}>
-                    {item === ALL_HATAY ? '🗺️  ' : '📍  '}
-                    {item}
-                  </Text>
-                  {active && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
-                </Pressable>
-              );
-            }}
-          />
-        </View>
-      </Modal>
-    </View>
+    <>
+      <SelectBox label={label} value={value} placeholder="İl seçin" icon="business-outline" error={error} onPress={() => setOpen(true)} />
+      <PickerSheet
+        visible={open}
+        title="İl seçin"
+        subtitle="LezzetHub Türkiye’nin 81 ilinde hizmet verir."
+        items={items}
+        value={value}
+        searchable
+        iconFor={(i) => (i === ALL_TURKEY ? '🇹🇷' : '🏙️')}
+        onPick={onChange}
+        onClose={() => setOpen(false)}
+      />
+    </>
+  );
+}
+
+export function DistrictPicker({
+  label = 'İlçe',
+  province,
+  value,
+  onChange,
+  includeAll,
+  error,
+}: {
+  label?: string;
+  province: string;
+  value: string;
+  onChange: (d: string) => void;
+  /** Filtrelerde "Tüm ilçeler" seçeneği. */
+  includeAll?: boolean;
+  error?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const districts = districtsOf(province);
+  const items = includeAll ? [ALL_DISTRICTS, ...districts] : districts;
+  return (
+    <>
+      <SelectBox
+        label={label}
+        value={value}
+        placeholder={districts.length ? 'İlçe seçin' : 'Önce il seçin'}
+        icon="map-outline"
+        error={error}
+        disabled={!districts.length}
+        onPress={() => setOpen(true)}
+      />
+      <PickerSheet
+        visible={open}
+        title={`${province} · İlçe seçin`}
+        items={items}
+        value={value}
+        searchable={items.length > 12}
+        iconFor={(i) => (i === ALL_DISTRICTS ? '🗺️' : '📍')}
+        onPick={onChange}
+        onClose={() => setOpen(false)}
+      />
+    </>
+  );
+}
+
+/** Birden fazla ilçe seçimi (kuryenin hizmet bölgesi). */
+export function MultiDistrictPicker({
+  label = 'Hizmet verdiğin ilçeler',
+  province,
+  value,
+  onChange,
+  error,
+}: {
+  label?: string;
+  province: string;
+  value: string[];
+  onChange: (d: string[]) => void;
+  error?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const districts = districtsOf(province);
+  const toggle = (d: string) => onChange(value.includes(d) ? value.filter((x) => x !== d) : [...value, d]);
+  return (
+    <>
+      <SelectBox
+        label={label}
+        value={value.length ? value.join(', ') : ''}
+        placeholder={districts.length ? 'İlçe seçin (birden fazla)' : 'Önce il seçin'}
+        icon="navigate-outline"
+        error={error}
+        disabled={!districts.length}
+        onPress={() => setOpen(true)}
+      />
+      <PickerSheet
+        visible={open}
+        title="Hizmet ilçeleri"
+        subtitle={`${province} ilinde kurye olarak hizmet vereceğin ilçeleri seç.`}
+        items={districts}
+        multi
+        selected={value}
+        searchable={districts.length > 12}
+        onPick={toggle}
+        onClose={() => setOpen(false)}
+      />
+    </>
   );
 }
 
 export function NeighborhoodInput({
+  province,
   district,
   value,
   onChange,
@@ -168,6 +330,7 @@ export function NeighborhoodInput({
   error,
   hint = 'Listede yoksa kendi mahallenizi yazabilirsiniz.',
 }: {
+  province?: string;
   district?: string;
   value: string;
   onChange: (v: string) => void;
@@ -177,7 +340,8 @@ export function NeighborhoodInput({
   hint?: string;
 }) {
   const [focused, setFocused] = useState(false);
-  const suggestions = useMemo(() => suggestNeighborhoods(district, value), [district, value]);
+  const pool = useNeighbourhoods(province, district);
+  const suggestions = useMemo(() => suggestNeighborhoods(pool, value), [pool, value]);
   return (
     <View>
       <Field
@@ -202,7 +366,7 @@ export function NeighborhoodInput({
       />
       {focused && suggestions.length > 0 && (
         <View style={styles.suggestBox}>
-          <Text style={[font.tiny, { marginBottom: 6 }]}>{district && district !== ALL_HATAY ? `${district} mahalleleri` : 'Öneriler'}</Text>
+          <Text style={[font.tiny, { marginBottom: 6 }]}>{district ? `${district} mahalleleri` : 'Öneriler'}</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {suggestions.map((s) => (
               <Pressable key={s} onPress={() => onChange(s)} style={styles.suggestChip}>
@@ -213,6 +377,30 @@ export function NeighborhoodInput({
         </View>
       )}
     </View>
+  );
+}
+
+/** İl + ilçe + mahalle birlikte (il değişince ilçe/mahalle sıfırlanır). */
+export function LocationFields({
+  value,
+  onChange,
+  errors = {},
+}: {
+  value: { province: string; district: string; neighborhood: string };
+  onChange: (v: { province: string; district: string; neighborhood: string }) => void;
+  errors?: { province?: string; district?: string; neighborhood?: string };
+}) {
+  return (
+    <>
+      <ProvincePicker value={value.province} onChange={(province) => onChange(province === value.province ? value : { province, district: '', neighborhood: '' })} error={errors.province} />
+      <DistrictPicker
+        province={value.province}
+        value={value.district}
+        onChange={(district) => onChange(district === value.district ? value : { ...value, district, neighborhood: '' })}
+        error={errors.district}
+      />
+      <NeighborhoodInput province={value.province} district={value.district} value={value.neighborhood} onChange={(neighborhood) => onChange({ ...value, neighborhood })} error={errors.neighborhood} />
+    </>
   );
 }
 
@@ -296,6 +484,35 @@ export function OrderCard({ order, perspective }: { order: Order; perspective: '
   );
 }
 
+/* ------------------------------ Onaylar ------------------------------ */
+
+/** Hukuki metne bağlantı (metin içinde). */
+export function LegalLink({ doc, label }: { doc: LegalKey; label: string }) {
+  return (
+    <Text style={{ color: colors.primary, fontWeight: '700', textDecorationLine: 'underline' }} onPress={() => router.push(`/legal/${doc}`)}>
+      {label}
+    </Text>
+  );
+}
+
+/** Zorunlu onay kutusu. Metin içinde LegalLink kullanılabilir. */
+export function ConsentCheck({ checked, onChange, children, required = true }: { checked: boolean; onChange: (v: boolean) => void; children: ReactNode; required?: boolean }) {
+  return (
+    <Pressable
+      onPress={() => onChange(!checked)}
+      style={[styles.consent, checked && { borderColor: colors.primaryLight, backgroundColor: colors.primarySoft }]}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+    >
+      <Ionicons name={checked ? 'checkbox' : 'square-outline'} size={22} color={checked ? colors.primary : colors.muted} />
+      <Text style={{ flex: 1, color: colors.inkSoft, lineHeight: 20, fontSize: 14 }}>
+        {children}
+        {required && <Text style={{ color: colors.danger, fontWeight: '800' }}> *</Text>}
+      </Text>
+    </Pressable>
+  );
+}
+
 /* ------------------------------ Yetki kapısı ------------------------------ */
 
 export function LoginRequired({ text = 'Bu bölümü kullanmak için giriş yapmalısın.' }: { text?: string }) {
@@ -329,6 +546,7 @@ const styles = StyleSheet.create({
   breakdown: { backgroundColor: colors.cream, borderRadius: radius.md, padding: 14, borderWidth: 1, borderColor: colors.creamDeep },
   bLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5, gap: 10 },
   bDivider: { height: 1, backgroundColor: colors.peach, marginVertical: 6, opacity: 0.7 },
+  consent: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', padding: 12, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, marginBottom: 10 },
   orderFooter: { justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: colors.cream, borderTopWidth: 1, borderTopColor: colors.line },
   unread: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: colors.accent, borderRadius: radius.pill, paddingHorizontal: 7, paddingVertical: 2 },
 });

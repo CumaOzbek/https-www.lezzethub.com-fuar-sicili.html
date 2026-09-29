@@ -15,7 +15,7 @@ export function listingShareText(listing: Listing, seller?: Pick<User, 'name'>) 
   const desc = listing.description.length > 120 ? listing.description.slice(0, 117) + '…' : listing.description;
   return [
     `🍲 ${listing.title} — ${tl(listing.price)}`,
-    `👩‍🍳 ${seller?.name ?? 'LezzetHub satıcısı'} · 📍 ${listing.neighborhood}, ${listing.district}`,
+    `👩‍🍳 ${seller?.name ?? 'LezzetHub satıcısı'} · 📍 ${listing.neighborhood}, ${listing.district}/${listing.province}`,
     desc,
     '',
     `Ev yapımı, randevulu sipariş için LezzetHub’da: ${listingUrl(listing.id)}`,

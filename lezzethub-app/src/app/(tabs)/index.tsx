@@ -4,10 +4,10 @@ import { useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ListingCard, NeighborhoodInput } from '../../components/domain';
+import { ListingCard, NeighborhoodInput, ProvincePicker } from '../../components/domain';
 import { Logo } from '../../components/Logo';
 import { Button, Chip, EmptyState, Field, IconButton, Row, useLightStatusBar } from '../../components/ui';
-import { ALL_HATAY, DISTRICTS, matchesText } from '../../lib/hatay';
+import { ALL_DISTRICTS, ALL_TURKEY, districtsOf, matchesText } from '../../lib/locations';
 import { useBlockedIds, useStore, useUnread } from '../../lib/store';
 import { colors, font, radius, shadow } from '../../lib/theme';
 import { CATEGORIES } from '../../lib/types';
@@ -19,34 +19,52 @@ export default function Discover() {
   const unread = useUnread();
   const insets = useSafeAreaInsets();
 
-  const [district, setDistrict] = useState<string>(me?.district ?? ALL_HATAY);
+  const [province, setProvince] = useState<string>(me?.province ?? ALL_TURKEY);
+  const [district, setDistrict] = useState<string>(me?.district ?? ALL_DISTRICTS);
+  const [cargoOnly, setCargoOnly] = useState(false);
   const [neighborhood, setNeighborhood] = useState('');
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
   // Varsayılan: kullanıcının kendi ilçesi (giriş/çıkış ve profil değişikliğinde güncellenir).
-  const sessionKey = `${me?.id ?? ''}|${me?.district ?? ''}`;
+  const sessionKey = `${me?.id ?? ''}|${me?.province ?? ''}|${me?.district ?? ''}`;
   const [prevSessionKey, setPrevSessionKey] = useState(sessionKey);
   if (prevSessionKey !== sessionKey) {
     setPrevSessionKey(sessionKey);
-    setDistrict(me?.district ?? ALL_HATAY);
+    setProvince(me?.province ?? ALL_TURKEY);
+    setDistrict(me?.district ?? ALL_DISTRICTS);
     setNeighborhood('');
   }
 
+  const chooseProvince = (p: string) => {
+    setProvince(p);
+    setDistrict(p === me?.province ? me.district : ALL_DISTRICTS);
+    setNeighborhood('');
+    setCargoOnly(false);
+  };
+
   const users = useMemo(() => new Map(db.users.map((u) => [u.id, u])), [db.users]);
 
-  // Kullanıcının kendi ilçesi "Hatay Geneli"nin hemen yanında gösterilir.
-  const districtChips = useMemo(
-    () => [ALL_HATAY, ...(me ? [me.district] : []), ...DISTRICTS.filter((d) => d !== me?.district)],
-    [me],
-  );
+  // Seçili ilin ilçeleri; kullanıcının kendi ilçesi "Tüm ilçeler"in hemen yanında gösterilir.
+  const districtChips = useMemo(() => {
+    if (province === ALL_TURKEY) return [];
+    const all = districtsOf(province);
+    const mine = me && me.province === province ? [me.district] : [];
+    return [ALL_DISTRICTS, ...mine, ...all.filter((d) => !mine.includes(d))];
+  }, [me, province]);
 
   const results = useMemo(() => {
     const list = db.listings.filter((l) => {
       const owner = users.get(l.ownerId);
       if (l.status !== 'active' || !owner?.active || blocked.has(l.ownerId)) return false;
-      if (district !== ALL_HATAY && l.district !== district) return false;
+      if (cargoOnly) {
+        // Kargolu ilanlar konumdan bağımsız olarak tüm Türkiye'ye gönderilir.
+        if (!l.delivery.includes('cargo')) return false;
+      } else {
+        if (province !== ALL_TURKEY && l.province !== province) return false;
+        if (province !== ALL_TURKEY && district !== ALL_DISTRICTS && l.district !== district) return false;
+      }
       if (neighborhood.trim() && !matchesText(l.neighborhood, neighborhood)) return false;
       if (category && l.category !== category) return false;
       if (query.trim() && !matchesText(`${l.title} ${l.description} ${owner.name}`, query)) return false;
@@ -54,7 +72,7 @@ export default function Discover() {
     });
     // Kullanıcının kendi ilanları akışın sonunda yer alır.
     return me ? [...list.filter((l) => l.ownerId !== me.id), ...list.filter((l) => l.ownerId === me.id)] : list;
-  }, [db.listings, users, district, neighborhood, category, query, me, blocked]);
+  }, [db.listings, users, province, district, cargoOnly, neighborhood, category, query, me, blocked]);
 
   const activeFilterCount = (neighborhood.trim() ? 1 : 0) + (category ? 1 : 0);
 
@@ -77,10 +95,10 @@ export default function Discover() {
           <Text style={styles.greetSub}>
             {me ? (
               <>
-                📍 {me.neighborhood}, {me.district} · Bugün mahallende neler pişiyor?
+                📍 {me.neighborhood}, {me.district}/{me.province} · Bugün mahallende neler pişiyor?
               </>
             ) : (
-              'Hatay’ın ev lezzetleri, komşundan kapına.'
+              'Türkiye’nin ev lezzetleri, komşundan kapına.'
             )}
           </Text>
           <View style={styles.searchWrap}>
@@ -88,7 +106,7 @@ export default function Discover() {
               icon="search"
               value={query}
               onChangeText={setQuery}
-              placeholder="Künefe, oruk, humus ara…"
+              placeholder="Mantı, künefe, sarma ara…"
               style={{ marginBottom: 0, flex: 1 }}
               returnKeyType="search"
               right={
@@ -112,30 +130,42 @@ export default function Discover() {
       </View>
 
       <View style={styles.body}>
-        <Text style={styles.filterLabel}>İlçe</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-          {districtChips.map((d) => (
-            <Chip
-              key={d}
-              label={d === me?.district ? `${d} (Benim)` : d}
-              emoji={d === ALL_HATAY ? '🗺️' : undefined}
-              active={district === d}
-              onPress={() => {
-                setDistrict(d);
-                setNeighborhood('');
-              }}
-            />
-          ))}
-        </ScrollView>
+        <Row gap={8} style={{ marginTop: 14, flexWrap: 'wrap' }}>
+          <Chip label="Kurye Bul" emoji="🛵" onPress={() => router.push('/couriers')} />
+          <Chip label="Kargoyla Türkiye geneli" emoji="📦" active={cargoOnly} onPress={() => setCargoOnly((v) => !v)} />
+        </Row>
+        {!cargoOnly && (
+          <>
+            <Text style={styles.filterLabel}>Konum</Text>
+            <ProvincePicker label="" value={province} onChange={chooseProvince} includeAll />
+            {districtChips.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.chips, { marginTop: -4 }]}>
+                {districtChips.map((d) => (
+                  <Chip
+                    key={d}
+                    label={d === me?.district && province === me?.province ? `${d} (Benim)` : d}
+                    emoji={d === ALL_DISTRICTS ? '🗺️' : undefined}
+                    active={district === d}
+                    onPress={() => {
+                      setDistrict(d);
+                      setNeighborhood('');
+                    }}
+                  />
+                ))}
+              </ScrollView>
+            )}
+          </>
+        )}
 
         {showFilters && (
           <View style={styles.filterPanel}>
             <NeighborhoodInput
-              district={district === ALL_HATAY ? undefined : district}
+              province={province === ALL_TURKEY ? undefined : province}
+              district={district === ALL_DISTRICTS ? undefined : district}
               value={neighborhood}
               onChange={setNeighborhood}
               label="Mahalle ara"
-              placeholder={district === ALL_HATAY ? 'Tüm Hatay’da mahalle ara' : `${district} içinde mahalle ara`}
+              placeholder={district === ALL_DISTRICTS || province === ALL_TURKEY ? 'Mahalle adı yaz' : `${district} içinde mahalle ara`}
               hint="Yazdıkça mahalle önerileri çıkar."
             />
             <Text style={styles.filterLabel}>Kategori</Text>
@@ -186,7 +216,9 @@ export default function Discover() {
         )}
 
         <Row style={{ justifyContent: 'space-between', marginTop: 16, marginBottom: 10 }}>
-          <Text style={font.h2}>{district === ALL_HATAY ? 'Hatay Geneli' : `${district} lezzetleri`}</Text>
+          <Text style={[font.h2, { flex: 1 }]} numberOfLines={1}>
+            {cargoOnly ? 'Kargoyla tüm Türkiye’ye' : province === ALL_TURKEY ? 'Türkiye Geneli' : district === ALL_DISTRICTS ? `${province} lezzetleri` : `${district} lezzetleri`}
+          </Text>
           <Text style={font.small}>{results.length} ilan</Text>
         </Row>
       </View>
@@ -211,9 +243,17 @@ export default function Discover() {
         <EmptyState
           emoji="🥘"
           title="Bu kriterlere uygun ilan yok"
-          text={district !== ALL_HATAY ? `${district} için ilan bulunamadı. Tüm Hatay’a bakmak ister misin?` : 'Filtreleri değiştirerek tekrar dene.'}
-          action={district !== ALL_HATAY ? 'Hatay Geneli’ni göster' : undefined}
-          onAction={() => setDistrict(ALL_HATAY)}
+          text={
+            cargoOnly
+              ? 'Kargolu ilan bulunamadı. Filtreleri değiştirerek tekrar dene.'
+              : province === ALL_TURKEY
+                ? 'Filtreleri değiştirerek tekrar dene.'
+                : district !== ALL_DISTRICTS
+                  ? `${district} için ilan bulunamadı. Tüm ${province}’a bakmak ister misin?`
+                  : `${province} için ilan bulunamadı. Kargoyla gönderilen ilanlara göz atabilirsin.`
+          }
+          action={cargoOnly || province === ALL_TURKEY ? undefined : district !== ALL_DISTRICTS ? `Tüm ${province}` : 'Kargolu ilanlar'}
+          onAction={() => (district !== ALL_DISTRICTS ? setDistrict(ALL_DISTRICTS) : setCargoOnly(true))}
         />
       }
     />

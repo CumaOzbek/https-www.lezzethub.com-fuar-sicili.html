@@ -1,189 +1,215 @@
+// İş kuralı testleri: npm test
 import * as api from '../src/lib/api';
 import { calcBreakdown } from '../src/lib/commission';
-import { createSeed } from '../src/lib/seed';
-import { suggestNeighborhoods } from '../src/lib/hatay';
+import { districtsOf, findProvince, isValidDistrict, loadNeighbourhoods, suggestNeighborhoods, PROVINCES } from '../src/lib/locations';
+import { TEST_CARDS, createSeed } from '../src/lib/seed';
 import type { DB } from '../src/lib/types';
 
-let pass = 0, failN = 0;
-const ok = (c: unknown, m: string) => { if (c) pass++; else { failN++; console.log('FAIL:', m); } };
-const throws = (fn: () => unknown, m: string) => { try { fn(); failN++; console.log('FAIL (no throw):', m); } catch (e) { if (e instanceof api.ApiError) pass++; else { failN++; console.log('FAIL (wrong error):', m, e); } } };
+let pass = 0;
+let failN = 0;
+const ok = (c: unknown, m: string) => {
+  if (c) pass++;
+  else {
+    failN++;
+    console.log('FAIL:', m);
+  }
+};
+const throws = (fn: () => unknown, m: string, expect?: string) => {
+  try {
+    fn();
+    failN++;
+    console.log('FAIL (no throw):', m);
+  } catch (e) {
+    if (!(e instanceof api.ApiError)) {
+      failN++;
+      console.log('FAIL (wrong error):', m, e);
+    } else if (expect && !e.message.includes(expect)) {
+      failN++;
+      console.log('FAIL (wrong message):', m, '→', e.message);
+    } else pass++;
+  }
+};
 const clone = (d: DB) => JSON.parse(JSON.stringify(d)) as DB;
-const fut = (days: number, h = 19) => { const d = new Date(); d.setDate(d.getDate() + days); d.setHours(h, 0, 0, 0); return d.toISOString(); };
+const fut = (days: number, h = 19) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  d.setHours(h, 0, 0, 0);
+  return d.toISOString();
+};
+const card = { holder: 'TEST KULLANICI', number: TEST_CARDS.success, expiry: '12/30', cvc: '123' };
+const reg = (over: Partial<api.RegisterInput> = {}): api.RegisterInput => ({
+  name: 'Ali Veli', email: 'ali@x.com', password: '123456', province: 'İzmir', district: 'Karşıyaka', neighborhood: 'Bostanlı',
+  acceptedTerms: true, kvkkConsent: true, intent: 'buyer', ...over,
+});
 
 (async () => {
-  // Komisyon
-  const b = calcBreakdown(180, 1);
-  ok(b.buyerFee === 18 && b.sellerFee === 27 && b.buyerTotal === 198 && b.sellerNet === 153 && b.platformRevenue === 45, 'commission 180');
-  const b2 = calcBreakdown(33.33, 3);
-  ok(b2.subtotal === 99.99 && b2.buyerFee === 10 && b2.sellerFee === 15 && b2.buyerTotal === 109.99, 'commission rounding ' + JSON.stringify(b2));
+  /* Konum verisi */
+  ok(PROVINCES.length === 81, '81 il');
+  ok(PROVINCES.reduce((s, p) => s + districtsOf(p.name).length, 0) === 973, '973 ilçe');
+  ok(findProvince('istanbul')?.code === '34' && findProvince('İZMİR')?.code === '35', 'il adı büyük/küçük harf duyarsız');
+  ok(isValidDistrict('Hatay', 'Antakya') && !isValidDistrict('Hatay', 'Kadıköy'), 'ilçe ile eşleşmeli');
+  const nb = await loadNeighbourhoods('İstanbul');
+  ok((nb['Kadıköy'] ?? []).includes('Caferağa'), 'mahalleler il bazında yüklenir');
+  ok(suggestNeighborhoods(nb['Kadıköy'] ?? [], 'fener')[0]?.startsWith('Fener'), 'mahalle önerisi');
 
+  /* Doğrulama yardımcıları */
+  ok(api.normalizePhone('0555 123 45 67') === '05551234567' && api.normalizePhone('+90 555 123 4567') === '05551234567', 'telefon biçimi');
+  ok(api.normalizePhone('0212 123 45 67') === null && api.normalizePhone('123') === null, 'geçersiz telefon');
+  ok(api.normalizeIban('TR33 0006 1005 1978 6457 8413 26') === 'TR330006100519786457841326', 'geçerli IBAN');
+  ok(api.normalizeIban('TR330006100519786457841327') === null && api.normalizeIban('DE89370400440532013000') === null, 'geçersiz IBAN');
+  ok(api.luhnValid(TEST_CARDS.success) && !api.luhnValid('4242 4242 4242 4241'), 'Luhn');
+
+  /* Komisyon */
+  const b = calcBreakdown(180, 1);
+  ok(b.buyerFee === 18 && b.sellerFee === 27 && b.buyerTotal === 198 && b.sellerNet === 153, 'komisyon');
+
+  /* Demo verisi */
   const seed = await createSeed(async (p) => 'h:' + p);
   const U = (db: DB, id: string) => db.users.find((u) => u.id === id)!;
-  ok(seed.users.length === 6 && seed.listings.length === 10 && seed.orders.length === 3, 'seed counts');
-  ok(seed.payments.filter((p) => p.status === 'pending').length === 1, 'seed pending payment');
-  ok(seed.listings.every((l) => l.district === U(seed, l.ownerId).district), 'listings inherit district');
+  ok(new Set(seed.users.map((u) => u.province)).size >= 4, 'demo verisi birden çok ilde');
+  ok(seed.listings.every((l) => U(seed, l.ownerId).sellerStatus === 'approved'), 'ilanların hepsi onaylı satıcılarda');
+  ok(seed.listings.every((l) => l.province === U(seed, l.ownerId).province && l.district === U(seed, l.ownerId).district), 'ilan konumu satıcıdan');
+  ok(seed.verifications.some((v) => v.status === 'pending' && v.kind === 'seller') && seed.verifications.some((v) => v.status === 'pending' && v.kind === 'courier'), 'bekleyen başvurular');
+  ok(seed.verifications.filter((v) => v.kind === 'seller').every((v) => !!v.iban && api.normalizeIban(v.iban!) === v.iban), 'demo IBAN geçerli');
+  ok(seed.orders.some((o) => o.delivery === 'cargo' && o.trackingCode), 'kargo takipli sipariş');
+  ok(seed.payments.filter((p) => p.status === 'succeeded').length === 3, '3 başarılı test ödemesi');
 
-  // Kayıt / giriş
-  let db = clone(seed);
-  throws(() => api.register(db, { name: 'Ab', email: 'x@y.com', password: '123456', district: 'Antakya', neighborhood: 'A', acceptedTerms: true }, 'h'), 'short name');
-  throws(() => api.register(db, { name: 'Ali Veli', email: 'bad', password: '123456', district: 'Antakya', neighborhood: 'A' , acceptedTerms: true }, 'h'), 'bad email');
-  throws(() => api.register(db, { name: 'Ali Veli', email: 'a@b.com', password: '123', district: 'Antakya', neighborhood: 'A' , acceptedTerms: true }, 'h'), 'short pw');
-  throws(() => api.register(db, { name: 'Ali Veli', email: 'a@b.com', password: '123456', district: 'Adana', neighborhood: 'A' , acceptedTerms: true }, 'h'), 'non-Hatay district');
-  throws(() => api.register(db, { name: 'Ali Veli', email: 'a@b.com', password: '123456', district: 'Antakya', neighborhood: '  ' , acceptedTerms: true }, 'h'), 'empty neighborhood');
-  throws(() => api.register(db, { name: 'Ali Veli', email: 'AYSE@lezzethub.com ', password: '123456', district: 'Antakya', neighborhood: 'A' , acceptedTerms: true }, 'h'), 'duplicate email case-insensitive');
-  const nu = api.register(db, { name: 'Ali Veli', email: 'Ali@B.com', password: '123456', district: 'Kumlu', neighborhood: 'Yeni' , acceptedTerms: true }, 'h:123456');
-  ok(nu.email === 'ali@b.com' && nu.role === 'user', 'register normalizes');
-  ok(api.login(db, 'ALI@b.com', 'h:123456').id === nu.id, 'login');
-  throws(() => api.login(db, 'ali@b.com', 'wrong'), 'wrong pw');
-  api.setUserActive(db, U(db, 'u-admin'), nu.id, false);
-  throws(() => api.login(db, 'ali@b.com', 'h:123456'), 'inactive login');
-
-  // İlan
-  db = clone(seed);
-  const ayse = U(db, 'u-ayse'), mehmet = U(db, 'u-mehmet'), admin = U(db, 'u-admin'), fatma = U(db, 'u-fatma');
-  const base = { title: 'Deneme', description: 'Uzun bir açıklama', price: 100, category: 'tatli' as const, images: [] as string[], prepTime: '', delivery: ['pickup' as const], status: 'active' as const };
-  throws(() => api.saveListing(db, ayse.id, { ...base, delivery: [] }), 'no delivery');
-  throws(() => api.saveListing(db, ayse.id, { ...base, price: 0 }), 'zero price');
-  throws(() => api.saveListing(db, ayse.id, { ...base, price: NaN }), 'NaN price');
-  const l = api.saveListing(db, ayse.id, base);
-  throws(() => api.saveListing(db, mehmet.id, base, l.id), 'edit others listing');
-  throws(() => api.setListingStatus(db, mehmet, l.id, 'passive'), 'status others listing');
-  api.setListingStatus(db, admin, l.id, 'passive');
-  throws(() => api.setListingStatus(db, ayse, l.id, 'active'), 'reactivate admin-removed');
-  api.setListingStatus(db, admin, l.id, 'active');
-  ok(!api.getListing(db, l.id)!.removedByAdmin, 'admin restore clears flag');
-  api.updateProfile(db, ayse.id, { name: ayse.name, bio: '', district: 'Belen', neighborhood: 'Kıcı', address: '', availability: '' });
-  ok(db.listings.filter((x) => x.ownerId === ayse.id).every((x) => x.district === 'Belen' && x.neighborhood === 'Kıcı'), 'profile move updates listings');
-
-  // Sipariş akışı
-  db = clone(seed);
-  const kunefe = db.listings.find((x) => x.title.startsWith('Antakya Künefesi'))!;
-  const kebap = db.listings.find((x) => x.title === 'Tepsi Kebabı')!;
-  const pasif = db.listings.find((x) => x.status === 'passive')!;
-  const oi = { listingId: kunefe.id, quantity: 2, appointment: fut(2), delivery: 'pickup' as const, address: '', note: '' };
-  throws(() => api.createOrder(db, ayse.id, oi), 'order own listing');
-  throws(() => api.createOrder(db, mehmet.id, { ...oi, quantity: 0 }), 'qty 0');
-  throws(() => api.createOrder(db, mehmet.id, { ...oi, quantity: 1.5 }), 'qty fraction');
-  throws(() => api.createOrder(db, mehmet.id, { ...oi, appointment: fut(-1) }), 'past appointment');
-  throws(() => api.createOrder(db, mehmet.id, { ...oi, listingId: kebap.id, delivery: 'courier', address: 'Bir adres 12' }), 'unsupported delivery');
-  throws(() => api.createOrder(db, mehmet.id, { ...oi, delivery: 'courier', address: '' }), 'courier no address');
-  throws(() => api.createOrder(db, mehmet.id, { ...oi, listingId: pasif.id }), 'passive listing');
-  const msgBefore = db.messages.length;
-  const o = api.createOrder(db, mehmet.id, oi);
-  ok(o.status === 'seller_pending' && o.buyerTotal === 396 && o.sellerNet === 306, 'order amounts');
-  ok(db.messages.length === msgBefore + 1 && db.messages.at(-1)!.senderId === mehmet.id, 'auto first message');
-  ok(db.notifications.some((n) => n.userId === ayse.id && n.orderId === o.id), 'seller notified');
-  throws(() => api.orderAction(db, mehmet, o.id, 'approve'), 'buyer cannot approve');
-  throws(() => api.orderAction(db, mehmet, o.id, 'pay'), 'pay before approve');
-  throws(() => api.orderAction(db, admin, o.id, 'paymentApprove'), 'admin approve too early');
-  api.orderAction(db, ayse, o.id, 'approve');
-  throws(() => api.orderAction(db, ayse, o.id, 'pay'), 'seller cannot pay');
-  api.orderAction(db, mehmet, o.id, 'pay');
-  ok(db.payments.some((p) => p.orderId === o.id && p.status === 'pending' && p.amount === 396), 'payment created');
-  throws(() => api.orderAction(db, mehmet, o.id, 'cancel'), 'no cancel while payment pending');
-  throws(() => api.orderAction(db, ayse, o.id, 'complete'), 'no complete before paid');
-  throws(() => api.orderAction(db, mehmet, o.id, 'paymentApprove'), 'non-admin approve payment');
-  const statsBefore = api.adminStats(db).commission;
-  api.orderAction(db, admin, o.id, 'paymentApprove');
-  ok(api.adminStats(db).commission === statsBefore + 90, 'commission counted after approval');
-  api.orderAction(db, mehmet, o.id, 'complete');
-  ok(api.getOrder(db, o.id)!.status === 'completed', 'completed');
-  throws(() => api.orderAction(db, ayse, o.id, 'complete'), 'double complete');
-  ok(api.getOrder(db, o.id)!.history.map((h) => h.status).join(',') === 'seller_pending,approved,payment_pending,paid,completed', 'history');
-
-  // Red / iptal
-  const o2 = api.createOrder(db, mehmet.id, oi);
-  api.orderAction(db, ayse, o2.id, 'reject', 'Malzeme yok');
-  ok(api.getOrder(db, o2.id)!.status === 'rejected' && api.getOrder(db, o2.id)!.statusNote === 'Malzeme yok', 'seller reject');
-  const o3 = api.createOrder(db, mehmet.id, oi);
-  api.orderAction(db, ayse, o3.id, 'approve'); api.orderAction(db, mehmet, o3.id, 'pay');
-  api.orderAction(db, admin, o3.id, 'paymentReject');
-  ok(api.getOrder(db, o3.id)!.status === 'rejected' && db.payments.find((p) => p.orderId === o3.id)!.status === 'rejected', 'payment reject');
-  const o4 = api.createOrder(db, mehmet.id, oi);
-  api.orderAction(db, mehmet, o4.id, 'cancel');
-  ok(api.getOrder(db, o4.id)!.status === 'cancelled', 'buyer cancel');
-
-  // Mesaj
-  throws(() => api.sendMessage(db, fatma.id, o.id, 'selam'), 'outsider message');
-  api.sendMessage(db, ayse.id, o.id, 'Afiyet olsun');
-  ok(db.messages.at(-1)!.receiverId === mehmet.id, 'message receiver');
-  ok(db.notifications.some((n) => n.userId === mehmet.id && n.orderId === o.id && n.title.startsWith(api.MESSAGE_PREFIX) && !n.read), 'message notification created');
-  ok(api.markChatRead(db, mehmet.id, o.id) === true && api.markChatRead(db, mehmet.id, o.id) === false, 'mark read');
-  ok(!db.notifications.some((n) => n.userId === mehmet.id && n.orderId === o.id && n.title.startsWith(api.MESSAGE_PREFIX) && !n.read), 'message notifications cleared');
-
-  // Silme kuralları
-  const o5 = api.createOrder(db, mehmet.id, oi);
-  throws(() => api.deleteListing(db, ayse, kunefe.id), 'delete listing with open order');
-  throws(() => api.deleteUser(db, admin, ayse.id), 'delete user with open order');
-  throws(() => api.deleteUser(db, admin, admin.id), 'delete self');
-  throws(() => api.setUserRole(db, mehmet, ayse.id, 'admin'), 'non-admin role change');
-  api.orderAction(db, mehmet, o5.id, 'cancel');
-
-  // Mahalle önerileri
-  ok(suggestNeighborhoods('Antakya', 'arm')[0] === 'Armutlu', 'suggest arm');
-  ok(suggestNeighborhoods('İskenderun', 'ÇAY').includes('Güzelçay'), 'suggest Turkish case');
-  ok(suggestNeighborhoods(undefined, 'har').length > 0, 'suggest all');
-
-
-  // Kayıt onayı
+  /* Kayıt ve zorunlu onaylar */
   {
-    const d = clone(seed);
-    throws(() => api.register(d, { name: 'Ali Veli', email: 'yeni@x.com', password: '123456', district: 'Kumlu', neighborhood: 'Yeni', acceptedTerms: false }, 'h'), 'terms required');
-    const u = api.register(d, { name: 'Ali Veli', email: 'yeni@x.com', password: '123456', district: 'Kumlu', neighborhood: 'Yeni', acceptedTerms: true }, 'h');
-    ok(!!u.acceptedTermsAt, 'terms timestamp saved');
+    const db = clone(seed);
+    throws(() => api.register(db, reg({ acceptedTerms: false }), 'h'), 'koşullar zorunlu', 'Kullanım Koşulları');
+    throws(() => api.register(db, reg({ kvkkConsent: false }), 'h'), 'açık rıza zorunlu', 'açık rıza');
+    throws(() => api.register(db, reg({ province: 'Atlantis' }), 'h'), 'geçersiz il', 'il');
+    throws(() => api.register(db, reg({ district: 'Kadıköy' }), 'h'), 'ilçe ile uyuşmuyor', 'ilçe');
+    throws(() => api.register(db, reg({ email: 'AYSE@lezzethub.com' }), 'h'), 'aynı e-posta');
+    const u = api.register(db, reg({ intent: 'seller' }), 'h:123456');
+    ok(u.province === 'İzmir' && u.sellerStatus === 'none' && u.courierStatus === 'none' && !!u.kvkkConsentAt && !!u.acceptedTermsAt, 'kayıt alanları ve onay zamanları');
+    ok(db.notifications.some((n) => n.userId === u.id && n.body.includes('hijyen belgeni')), 'satıcı niyetiyle kayıtta yönlendirme');
   }
-  // Fotoğraf sınırı ve kayıt
+
+  /* Satıcı başvurusu ve onay */
   {
-    const d = clone(seed);
-    const a = U(d, 'u-ayse');
-    const b0 = { title: 'Foto', description: 'Uzun bir açıklama', price: 50, category: 'tatli' as const, prepTime: '', delivery: ['pickup' as const], status: 'active' as const };
-    throws(() => api.saveListing(d, a.id, { ...b0, images: ['1','2','3','4','5','6','7'] }), 'max 6 photos');
-    const l = api.saveListing(d, a.id, { ...b0, images: ['p1', 'p2'] });
-    ok(l.images.join() === 'p1,p2', 'images saved in order');
-    throws(() => api.saveListing(d, a.id, { ...b0, images: [], price: 100001 }), 'price upper bound');
+    const db = clone(seed);
+    const u = api.register(db, reg(), 'h');
+    const base = { title: 'Mantı', description: 'Ev yapımı mantı açıklaması', price: 100, category: 'hamur-isi' as const, images: [], prepTime: '', delivery: ['cargo' as const], shippingPayer: 'buyer' as const, status: 'active' as const };
+    throws(() => api.saveListing(db, u.id, base), 'onaysız satıcı ilan veremez', 'hijyen belgesi');
+    const app = { docUri: 'file://doc.jpg', docType: 'image' as const, barcode: 'MEB-ABCD-1234', iban: 'TR330006100519786457841326', ibanHolder: 'Ali Veli', acceptDeclaration: true, acceptDocumentConsent: true };
+    throws(() => api.submitSellerApplication(db, u.id, { ...app, docUri: '' }), 'belge zorunlu', 'hijyen belgeni');
+    throws(() => api.submitSellerApplication(db, u.id, { ...app, barcode: '12' }), 'barkod zorunlu', 'barkod');
+    throws(() => api.submitSellerApplication(db, u.id, { ...app, iban: 'TR000' }), 'IBAN geçerli olmalı', 'IBAN');
+    throws(() => api.submitSellerApplication(db, u.id, { ...app, acceptDeclaration: false }), 'mevzuat beyanı zorunlu', 'beyan');
+    throws(() => api.submitSellerApplication(db, u.id, { ...app, acceptDocumentConsent: false }), 'belge açık rızası zorunlu', 'açık rıza');
+    api.submitSellerApplication(db, u.id, app);
+    const v = db.verifications.find((x) => x.userId === u.id)!;
+    ok(U(db, u.id).sellerStatus === 'pending' && v.status === 'pending' && !!v.declarationAt && v.iban === 'TR330006100519786457841326', 'başvuru kaydı');
+    ok(db.notifications.some((n) => n.userId === 'u-admin' && n.title.includes('satıcı başvurusu')), 'admine bildirim');
+    throws(() => api.saveListing(db, u.id, base), 'bekleyen satıcı ilan veremez');
+    throws(() => api.reviewVerification(db, U(db, 'u-mehmet'), v.id, true), 'admin olmayan onaylayamaz', 'yönetici');
+    throws(() => api.reviewVerification(db, U(db, 'u-admin'), v.id, false), 'red gerekçesi zorunlu', 'gerekçe');
+    api.reviewVerification(db, U(db, 'u-admin'), v.id, false, 'Belge okunmuyor');
+    ok(U(db, u.id).sellerStatus === 'rejected' && db.notifications.some((n) => n.userId === u.id && n.body.includes('Belge okunmuyor')), 'red ve gerekçe bildirimi');
+    api.submitSellerApplication(db, u.id, app);
+    api.reviewVerification(db, U(db, 'u-admin'), db.verifications.find((x) => x.userId === u.id)!.id, true);
+    ok(U(db, u.id).sellerStatus === 'approved' && db.verifications.filter((x) => x.userId === u.id).length === 1, 'yeniden başvuru ve onay');
+    const l = api.saveListing(db, u.id, base);
+    ok(l.province === 'İzmir' && l.district === 'Karşıyaka' && l.shippingPayer === 'buyer', 'onaylı satıcı ilan verir, il miras');
+    throws(() => api.saveListing(db, u.id, { ...base, shippingPayer: 'x' as never }), 'ücret sorumlusu zorunlu');
   }
-  // Elden teslim adresi onayda paylaşılır
+
+  /* Kurye başvurusu */
   {
-    const d = clone(seed);
-    const k = d.listings.find((x) => x.title.startsWith('Antakya Künefesi'))!;
-    const o = api.createOrder(d, 'u-mehmet', { listingId: k.id, quantity: 1, appointment: fut(2), delivery: 'pickup', address: '', note: '' });
-    ok(!api.getOrder(d, o.id)!.pickupAddress, 'no pickup address before approval');
-    api.orderAction(d, U(d, 'u-ayse'), o.id, 'approve');
-    ok(api.getOrder(d, o.id)!.pickupAddress === U(d, 'u-ayse').address, 'pickup address after approval');
-    ok(api.firstOrderMessage('Künefe', { appointment: fut(2), quantity: 2, delivery: 'pickup', note: 'Fıstıklı' }).includes('📝 Not: Fıstıklı'), 'first message includes note');
+    const db = clone(seed);
+    const u = api.register(db, reg({ email: 'kurye@x.com', intent: 'courier' }), 'h');
+    const app = { licenseClass: 'A2' as const, licenseNumber: '123456', docUri: 'file://ehliyet.jpg', docType: 'image' as const, phone: '0555 111 22 33', serviceProvince: 'İzmir', serviceDistricts: ['Karşıyaka', 'Bayraklı'], acceptDocumentConsent: true, acceptDeclaration: true };
+    throws(() => api.submitCourierApplication(db, u.id, { ...app, licenseClass: 'C' as never }), 'yalnızca A2/B', 'A2 veya B');
+    throws(() => api.submitCourierApplication(db, u.id, { ...app, docUri: '' }), 'ehliyet fotoğrafı zorunlu', 'fotoğrafını');
+    throws(() => api.submitCourierApplication(db, u.id, { ...app, phone: '123' }), 'telefon zorunlu', 'Telefon');
+    throws(() => api.submitCourierApplication(db, u.id, { ...app, serviceDistricts: [] }), 'ilçe zorunlu', 'ilçe');
+    throws(() => api.submitCourierApplication(db, u.id, { ...app, serviceDistricts: ['Kadıköy'] }), 'ilçe hizmet iline ait olmalı');
+    throws(() => api.submitCourierApplication(db, u.id, { ...app, acceptDocumentConsent: false }), 'açık rıza zorunlu', 'açık rıza');
+    api.submitCourierApplication(db, u.id, app);
+    ok(U(db, u.id).courierStatus === 'pending' && db.couriers.find((c) => c.userId === u.id)?.vehicle === 'motorcycle', 'kurye başvurusu, A2 → motosiklet');
+    ok(api.couriersNear(db, 'İzmir', 'Karşıyaka').length === 0, 'onaysız kurye listede görünmez');
+    api.reviewVerification(db, U(db, 'u-admin'), db.verifications.find((v) => v.userId === u.id && v.kind === 'courier')!.id, true);
+    ok(api.couriersNear(db, 'İzmir', 'Karşıyaka').some((x) => x.user.id === u.id && x.servesDistrict), 'onaylı kurye yakındakilere görünür');
+    ok(api.couriersNear(db, 'İzmir', 'Konak')[0]?.servesDistrict === false, 'aynı ildeki diğer ilçelerde de listelenir ama yakın değil');
+    api.updateCourierProfile(db, u.id, { available: false, serviceDistricts: ['Konak'] });
+    ok(api.couriersNear(db, 'İzmir', 'Konak')[0]?.servesDistrict === true, 'hizmet ilçeleri güncellenir');
+    throws(() => api.updateCourierProfile(db, u.id, { serviceDistricts: ['Çankaya'] }), 'başka ilin ilçesi seçilemez');
+    const near = api.couriersNear(seed, 'Hatay', 'Antakya');
+    ok(near.length === 1 && near[0]!.user.id === 'u-kemal', 'demo kurye Antakya’da');
+    ok(api.couriersNear(seed, 'İstanbul', 'Kadıköy').length === 0, 'bekleyen demo kurye görünmez');
   }
-  // Hesap silme
+
+  /* Sipariş, kargo ve online ödeme */
   {
-    const d = clone(seed);
-    throws(() => api.deleteAccount(d, 'u-mehmet'), 'delete blocked by open order');
-    const hatice = 'u-hatice';
-    throws(() => api.deleteAccount(d, hatice), 'hatice has pending payment');
-    api.deleteAccount(d, 'u-zeynep');
-    ok(!api.getUser(d, 'u-zeynep') && !d.listings.some((l) => l.ownerId === 'u-zeynep'), 'account + listings removed');
+    const db = clone(seed);
+    const baklava = db.listings.find((l) => l.title.startsWith('Antep Fıstıklı'))!;
+    const oi = { listingId: baklava.id, quantity: 1, appointment: fut(3), delivery: 'cargo' as const, address: '', note: '' };
+    throws(() => api.createOrder(db, 'u-mehmet', oi), 'kargo için adres zorunlu', 'Kargo');
+    throws(() => api.createOrder(db, 'u-mehmet', { ...oi, delivery: 'pickup', address: '' }), 'desteklenmeyen teslimat');
+    const o = api.createOrder(db, 'u-mehmet', { ...oi, address: 'Cumhuriyet Mah. Atatürk Cad. No:88, Antakya/Hatay' });
+    ok(o.shippingPayer === 'seller' && o.buyerTotal === 935 && o.payoutStatus === 'pending', 'sipariş: ücret sorumlusu ilandan, tutarlar');
+    ok(!api.canPay(o, U(db, 'u-mehmet')), 'onaydan önce ödeme yok');
+    throws(() => api.payWithTestCard(db, 'u-mehmet', o.id, card), 'onaysız ödeme', 'ödeme yapılamaz');
+    api.orderAction(db, U(db, 'u-serkan'), o.id, 'approve');
+    ok(api.canPay(api.getOrder(db, o.id)!, U(db, 'u-mehmet')) && !api.canPay(api.getOrder(db, o.id)!, U(db, 'u-serkan')), 'yalnızca alıcı öder');
+    throws(() => api.payWithTestCard(db, 'u-mehmet', o.id, { ...card, number: '4242 4242 4242 4241' }), 'Luhn hatalı kart', 'Kart numarası');
+    throws(() => api.payWithTestCard(db, 'u-mehmet', o.id, { ...card, expiry: '01/20' }), 'süresi geçmiş kart', 'geçmiş');
+    throws(() => api.payWithTestCard(db, 'u-mehmet', o.id, { ...card, cvc: '1' }), 'CVC', 'CVC');
+    throws(() => api.payWithTestCard(db, 'u-mehmet', o.id, { ...card, number: TEST_CARDS.declined }), 'reddedilen kart', 'başarısız');
+    ok(api.getOrder(db, o.id)!.status === 'approved' && db.payments.some((p) => p.orderId === o.id && p.status === 'failed'), 'başarısız ödeme kaydı, sipariş ödeme bekler');
+    throws(() => api.setShipment(db, U(db, 'u-serkan'), o.id, 'Aras', 'AR123456'), 'ödemeden önce kargo bilgisi yok');
+    api.payWithTestCard(db, 'u-mehmet', o.id, card);
+    const paid = db.payments.find((p) => p.orderId === o.id && p.status === 'succeeded')!;
+    ok(api.getOrder(db, o.id)!.status === 'paid' && paid.amount === 935 && paid.cardLast4 === '4242' && paid.provider === 'test', 'başarılı ödeme');
+    ok(!JSON.stringify(db.payments).includes('4242424242424242'), 'kart numarası saklanmaz');
+    ok(db.notifications.some((n) => n.userId === 'u-serkan' && n.title.startsWith('Ödeme alındı')), 'satıcıya ödeme bildirimi');
+    throws(() => api.setShipment(db, U(db, 'u-mehmet'), o.id, 'Aras', 'AR123456'), 'kargo bilgisini yalnızca satıcı girer');
+    api.setShipment(db, U(db, 'u-serkan'), o.id, 'Aras Kargo', 'AR123456');
+    ok(api.getOrder(db, o.id)!.trackingCode === 'AR123456', 'kargo takip no');
+    ok(api.availableActions(api.getOrder(db, o.id)!, U(db, 'u-admin')).includes('refund'), 'admin iade edebilir');
+    throws(() => api.orderAction(db, U(db, 'u-mehmet'), o.id, 'refund'), 'alıcı iade yapamaz');
+    throws(() => api.orderAction(db, U(db, 'u-mehmet'), o.id, 'cancel'), 'ödemeden sonra alıcı iptal edemez');
+    api.orderAction(db, U(db, 'u-admin'), o.id, 'refund', 'Ürün bozuk geldi');
+    ok(api.getOrder(db, o.id)!.status === 'cancelled' && db.payments.find((p) => p.id === paid.id)!.status === 'refunded', 'iade: ödeme iade, sipariş iptal');
+
+    // Elden teslim adresi onayda
+    const kunefe = db.listings.find((l) => l.title.startsWith('Antakya Künefesi'))!;
+    const o2 = api.createOrder(db, 'u-mehmet', { listingId: kunefe.id, quantity: 1, appointment: fut(2), delivery: 'pickup', address: '', note: '' });
+    ok(!api.getOrder(db, o2.id)!.pickupAddress, 'onaydan önce satıcı adresi yok');
+    api.orderAction(db, U(db, 'u-ayse'), o2.id, 'approve');
+    ok(api.getOrder(db, o2.id)!.pickupAddress === U(db, 'u-ayse').address, 'onaydan sonra satıcı adresi');
+    api.orderAction(db, U(db, 'u-mehmet'), o2.id, 'cancel');
+    ok(api.getOrder(db, o2.id)!.status === 'cancelled', 'ödemeden önce iptal');
   }
-  // Şikayet, engelleme
+
+  /* Satıcı ödemeleri */
   {
-    const d = clone(seed);
-    const k = d.listings.find((x) => x.title.startsWith('Antakya Künefesi'))!;
-    api.reportContent(d, 'u-mehmet', { targetType: 'listing', targetId: k.id, reason: 'hygiene', note: 'x' });
-    ok(d.reports.length === 1 && d.notifications.some((n) => n.userId === 'u-admin' && n.title.startsWith('Yeni şikayet')), 'report + admin notified');
-    throws(() => api.reportContent(d, 'u-mehmet', { targetType: 'listing', targetId: k.id, reason: 'hygiene', note: '' }), 'duplicate open report');
-    throws(() => api.reportContent(d, 'u-mehmet', { targetType: 'user', targetId: 'u-mehmet', reason: 'abuse', note: '' }), 'self report');
-    throws(() => api.resolveReport(d, U(d, 'u-mehmet'), d.reports[0]!.id), 'non-admin resolve');
-    api.resolveReport(d, U(d, 'u-admin'), d.reports[0]!.id);
-    ok(d.reports[0]!.status === 'resolved', 'report resolved');
-    api.blockUser(d, 'u-mehmet', 'u-ayse');
-    api.blockUser(d, 'u-mehmet', 'u-ayse');
-    ok(d.blocks.length === 1, 'block idempotent');
-    const open = d.orders.find((o) => o.buyerId === 'u-mehmet' && o.sellerId === 'u-ayse')!;
-    throws(() => api.sendMessage(d, 'u-ayse', open.id, 'selam'), 'blocked: seller cannot message');
-    throws(() => api.createOrder(d, 'u-mehmet', { listingId: k.id, quantity: 1, appointment: fut(2), delivery: 'pickup', address: '', note: '' }), 'blocked: cannot order');
-    api.unblockUser(d, 'u-mehmet', 'u-ayse');
-    api.sendMessage(d, 'u-ayse', open.id, 'selam');
-    ok(true, 'unblock restores messaging');
-    throws(() => api.sendMessage(d, 'u-ayse', open.id, 'x'.repeat(1001)), 'message length');
-    api.markNotificationsRead(d, 'u-mehmet');
-    ok(!d.notifications.some((n) => n.userId === 'u-mehmet' && !n.read), 'notifications read');
+    const db = clone(seed);
+    const summary = api.payoutSummary(db);
+    ok(summary.length === 1 && summary[0]!.sellerId === 'u-fatma' && summary[0]!.total === 221 && !!summary[0]!.verification?.iban, 'satıcıya aktarılacak tutar ve IBAN');
+    const shipped = db.orders.find((o) => o.delivery === 'cargo')!;
+    throws(() => api.markPayout(db, U(db, 'u-admin'), [shipped.id]), 'tamamlanmamış siparişe ödeme yok');
+    throws(() => api.markPayout(db, U(db, 'u-mehmet'), [summary[0]!.orders[0]!.id]), 'admin olmayan ödeme işaretleyemez');
+    api.markPayout(db, U(db, 'u-admin'), summary[0]!.orders.map((o) => o.id));
+    ok(api.payoutSummary(db).length === 0 && api.adminStats(db).payoutDue === 0, 'ödeme işaretlendi');
+    const s = api.adminStats(seed);
+    ok(s.pendingVerifications === 2 && s.couriers === 1 && s.payoutDueCount === 1, 'admin istatistikleri');
+  }
+
+  /* Şikayet, engelleme, hesap silme */
+  {
+    const db = clone(seed);
+    const k = db.listings.find((x) => x.title.startsWith('Antakya Künefesi'))!;
+    api.reportContent(db, 'u-mehmet', { targetType: 'listing', targetId: k.id, reason: 'hygiene', note: 'x' });
+    throws(() => api.reportContent(db, 'u-mehmet', { targetType: 'listing', targetId: k.id, reason: 'hygiene', note: '' }), 'mükerrer şikayet');
+    api.blockUser(db, 'u-mehmet', 'u-ayse');
+    throws(() => api.createOrder(db, 'u-mehmet', { listingId: k.id, quantity: 1, appointment: fut(2), delivery: 'pickup', address: '', note: '' }), 'engelliyken sipariş yok');
+    api.unblockUser(db, 'u-mehmet', 'u-ayse');
+    throws(() => api.deleteAccount(db, 'u-mehmet'), 'açık siparişle hesap silinmez');
+    api.deleteAccount(db, 'u-kemal');
+    ok(!db.couriers.some((c) => c.userId === 'u-kemal') && !db.verifications.some((v) => v.userId === 'u-kemal'), 'hesap silinince kurye profili ve belgeler silinir');
   }
 
   console.log(`${pass} passed, ${failN} failed`);

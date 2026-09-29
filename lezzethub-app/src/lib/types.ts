@@ -1,5 +1,8 @@
 export type Role = 'user' | 'admin';
 
+/** Satıcı ve kurye başvurularının durumu. */
+export type VerificationStatus = 'none' | 'pending' | 'approved' | 'rejected';
+
 export interface User {
   id: string;
   name: string;
@@ -11,17 +14,29 @@ export interface User {
   active: boolean;
   bio: string;
   avatar?: string;
+  province: string;
   district: string;
   neighborhood: string;
   /** Açık adres: yalnızca kullanıcının kendisine ve adminlere görünür. */
   address: string;
+  /** Telefon: yalnızca kullanıcının kendisine ve adminlere görünür (kuryeler için kurye profilinde paylaşılır). */
+  phone: string;
   availability: string;
+  /** Satış yapabilmek için hijyen belgesi admin tarafından onaylanmış olmalı. */
+  sellerStatus: VerificationStatus;
+  /** Kurye olarak görünmek için ehliyet admin tarafından onaylanmış olmalı. */
+  courierStatus: VerificationStatus;
+  /** Kullanım koşulları ve KVKK aydınlatma metni kabulü. */
   acceptedTermsAt?: string;
+  /** KVKK açık rıza onayı. */
+  kvkkConsentAt?: string;
   createdAt: string;
 }
 
-export type DeliveryMethod = 'courier' | 'pickup';
+export type DeliveryMethod = 'pickup' | 'courier' | 'cargo';
 export type ListingStatus = 'active' | 'passive';
+/** Kurye / kargo ücretini ve organizasyonunu üstlenen taraf. */
+export type ShippingPayer = 'buyer' | 'seller';
 
 export const CATEGORIES = [
   { key: 'ana-yemek', label: 'Ana Yemek', emoji: '🍲' },
@@ -47,23 +62,19 @@ export interface Listing {
   images: string[];
   prepTime: string;
   delivery: DeliveryMethod[];
+  /** Kurye veya kargo ile teslimde ücreti kim öder / kim ayarlar. */
+  shippingPayer: ShippingPayer;
   status: ListingStatus;
   /** Admin tarafından yayından kaldırıldıysa satıcı tekrar yayına alamaz. */
   removedByAdmin?: boolean;
+  province: string;
   district: string;
   neighborhood: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export type OrderStatus =
-  | 'seller_pending'
-  | 'approved'
-  | 'payment_pending'
-  | 'paid'
-  | 'completed'
-  | 'rejected'
-  | 'cancelled';
+export type OrderStatus = 'seller_pending' | 'approved' | 'paid' | 'completed' | 'rejected' | 'cancelled';
 
 export interface Order {
   id: string;
@@ -76,10 +87,14 @@ export interface Order {
   quantity: number;
   appointment: string;
   delivery: DeliveryMethod;
-  /** Kurye teslimatında alıcının adresi. */
+  shippingPayer: ShippingPayer;
+  /** Kurye/kargo teslimatında alıcının adresi. */
   address: string;
   /** Elden teslimde satıcının adresi; satıcı onayladığında doldurulur. */
   pickupAddress?: string;
+  /** Kargo teslimatında satıcının girdiği bilgiler. */
+  shippingCompany?: string;
+  trackingCode?: string;
   note: string;
   subtotal: number;
   buyerFee: number;
@@ -88,6 +103,9 @@ export interface Order {
   sellerNet: number;
   status: OrderStatus;
   statusNote?: string;
+  /** Satıcıya net tutarın aktarılma durumu (tamamlanan siparişlerde). */
+  payoutStatus: 'pending' | 'paid';
+  payoutAt?: string;
   history: { status: OrderStatus; at: string; by: string; note?: string }[];
   createdAt: string;
   updatedAt: string;
@@ -103,17 +121,24 @@ export interface Message {
   read: boolean;
 }
 
-export type PaymentStatus = 'pending' | 'approved' | 'rejected';
+export type PaymentStatus = 'pending' | 'succeeded' | 'failed' | 'refunded';
 
 export interface Payment {
   id: string;
   orderId: string;
   amount: number;
+  currency: 'TRY';
+  /** 'iyzico' canlı ödeme; 'test' demo modunda simüle edilen ödeme. */
+  provider: 'iyzico' | 'test';
   status: PaymentStatus;
-  adminId?: string;
-  adminNote?: string;
+  providerPaymentId?: string;
+  cardLast4?: string;
+  cardAssociation?: string;
+  errorMessage?: string;
+  refundNote?: string;
   createdAt: string;
-  decidedAt?: string;
+  paidAt?: string;
+  refundedAt?: string;
 }
 
 export interface AppNotification {
@@ -155,6 +180,44 @@ export interface Block {
   createdAt: string;
 }
 
+export type DocumentType = 'image' | 'pdf';
+export type LicenseClass = 'A2' | 'B';
+
+/** Satıcı (hijyen belgesi) veya kurye (ehliyet) başvurusu. Yalnızca sahibi ve adminler görür. */
+export interface Verification {
+  id: string;
+  userId: string;
+  kind: 'seller' | 'courier';
+  status: Exclude<VerificationStatus, 'none'>;
+  /** Belge dosyası (fotoğraf veya PDF). Canlı modda özel depodaki yol. */
+  docUri: string;
+  docType: DocumentType;
+  /** Satıcı: e-Devlet belge barkod numarası. Kurye: ehliyet belge numarası. */
+  docNumber: string;
+  licenseClass?: LicenseClass;
+  iban?: string;
+  ibanHolder?: string;
+  /** Satıcının mevzuat ve sorumluluk beyanını onayladığı an. */
+  declarationAt?: string;
+  /** Belgelerin işlenmesine ilişkin açık rıza. */
+  documentConsentAt: string;
+  adminNote?: string;
+  submittedAt: string;
+  reviewedAt?: string;
+}
+
+export interface CourierProfile {
+  userId: string;
+  licenseClass: LicenseClass;
+  vehicle: 'motorcycle' | 'car';
+  /** Onaylı kuryenin iletişim numarası; kurye paylaşılmasına onay verir. */
+  phone: string;
+  serviceProvince: string;
+  serviceDistricts: string[];
+  available: boolean;
+  updatedAt: string;
+}
+
 export interface DB {
   version: number;
   users: User[];
@@ -165,4 +228,6 @@ export interface DB {
   notifications: AppNotification[];
   reports: Report[];
   blocks: Block[];
+  verifications: Verification[];
+  couriers: CourierProfile[];
 }

@@ -4,8 +4,8 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { LoginRequired, OrderCard } from '../../components/domain';
-import { Avatar, Card, Header, IconButton, LocationBadge, Row, Screen, SectionTitle, StatCard, type IconName } from '../../components/ui';
-import { tl } from '../../lib/format';
+import { Avatar, Button, Card, Header, IconButton, LocationBadge, Notice, Row, Screen, SectionTitle, StatCard, type IconName } from '../../components/ui';
+import { VERIFICATION_LABEL, tl } from '../../lib/format';
 import { useStore, useUnread } from '../../lib/store';
 import { colors, font } from '../../lib/theme';
 
@@ -38,7 +38,7 @@ export default function Dashboard() {
     const mine = db.listings.filter((l) => l.ownerId === me.id);
     const buying = db.orders.filter((o) => o.buyerId === me.id);
     const selling = db.orders.filter((o) => o.sellerId === me.id);
-    const open = ['seller_pending', 'approved', 'payment_pending', 'paid'];
+    const open = ['seller_pending', 'approved', 'paid'];
     return {
       active: mine.filter((l) => l.status === 'active').length,
       passive: mine.filter((l) => l.status !== 'active').length,
@@ -81,7 +81,7 @@ export default function Dashboard() {
           <View style={{ flex: 1 }}>
             <Text style={{ color: '#fff', fontWeight: '900', fontSize: 18 }}>{me.name}</Text>
             <Text style={{ color: colors.onPrimaryMuted, fontSize: 13, marginTop: 2 }}>
-              📍 {me.neighborhood}, {me.district}
+              📍 {me.neighborhood}, {me.district}/{me.province}
             </Text>
           </View>
         </Row>
@@ -98,6 +98,19 @@ export default function Dashboard() {
         </View>
       </Card>
 
+      {me.sellerStatus !== 'approved' && (
+        <View style={{ marginTop: 12 }}>
+          <Notice
+            tone={me.sellerStatus === 'rejected' ? 'red' : me.sellerStatus === 'pending' ? 'yellow' : 'teal'}
+            icon="storefront-outline"
+            title={me.sellerStatus === 'pending' ? 'Satıcı başvurun inceleniyor' : me.sellerStatus === 'rejected' ? 'Satıcı başvurun reddedildi' : 'Satış yapmak ister misin?'}
+            text={me.sellerStatus === 'pending' ? 'Hijyen belgen onaylandığında ilan verebileceksin.' : 'Tüm satıcıların e-Devlet onaylı hijyen belgesi yüklemesi ve mevzuat beyanını onaylaması zorunludur.'}
+          />
+        </View>
+      )}
+      {me.sellerStatus !== 'approved' && me.sellerStatus !== 'pending' && (
+        <Button title="Satıcı başvurusu" icon="document-attach-outline" variant="secondary" small onPress={() => router.push('/apply/seller')} style={{ marginTop: 8, alignSelf: 'flex-start' }} />
+      )}
       <View style={styles.grid}>
         <StatCard label="Yayındaki ilan" value={s.active} icon="megaphone-outline" tone="green" onPress={() => router.push('/my-listings')} />
         <StatCard label="Pasif ilan" value={s.passive} icon="pause-circle-outline" tone="gray" onPress={() => router.push('/my-listings')} />
@@ -124,12 +137,15 @@ export default function Dashboard() {
         <MenuItem icon="restaurant-outline" title="İlanlarım" subtitle="Düzenle, pasifleştir veya sil" onPress={() => router.push('/my-listings')} />
         <MenuItem icon="receipt-outline" title="Siparişlerim" subtitle="Alıcı ve satıcı siparişleri" badge={s.toApprove.length || undefined} onPress={() => router.navigate('/orders')} />
         <MenuItem icon="add-circle-outline" title="Yeni İlan Ver" subtitle="Ev yapımı lezzetini paylaş" onPress={() => router.push('/listing-form')} />
+        <MenuItem icon="document-attach-outline" title="Satıcı başvurusu" subtitle={`Hijyen belgesi · ${VERIFICATION_LABEL[me.sellerStatus]}`} onPress={() => router.push('/apply/seller')} />
+        <MenuItem icon="bicycle-outline" title={me.courierStatus === 'approved' ? 'Kurye panelim' : 'Kurye ol'} subtitle={`A2/B ehliyet · ${VERIFICATION_LABEL[me.courierStatus]}`} onPress={() => router.push('/apply/courier')} />
+        <MenuItem icon="people-outline" title="Kurye Bul" subtitle="Yakınındaki onaylı kuryeler" onPress={() => router.push('/couriers')} />
         <MenuItem icon="notifications-outline" title="Bildirimler" subtitle="Sipariş ve mesaj bildirimleri" badge={unread.notifications || undefined} onPress={() => router.push('/notifications')} />
         <MenuItem icon="person-outline" title="Profilim" subtitle="Bio, konum, adres, müsaitlik, şifre" onPress={() => router.navigate('/profile')} />
       </Card>
 
       <View style={{ alignItems: 'center', marginTop: 16 }}>
-        <LocationBadge district={me.district} neighborhood={me.neighborhood} />
+        <LocationBadge province={me.province} district={me.district} neighborhood={me.neighborhood} />
       </View>
     </Screen>
   );

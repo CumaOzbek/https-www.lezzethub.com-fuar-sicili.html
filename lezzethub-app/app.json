@@ -2,7 +2,7 @@
   "expo": {
     "name": "LezzetHub",
     "slug": "lezzethub",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -54,13 +54,14 @@
           "backgroundColor": "#FAF7F2"
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "expo-web-browser"
     ],
     "scheme": "lezzethub",
     "primaryColor": "#1F5E57",
     "experiments": {
       "typedRoutes": false
     },
-    "description": "Hatay’ın ev yemekleri pazaryeri: ilçe ve mahalle bazında randevulu sipariş."
+    "description": "Türkiye’nin ev yemekleri pazaryeri: il, ilçe ve mahalle bazında randevulu sipariş, online ödeme, kurye ve kargo."
   }
 }

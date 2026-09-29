@@ -44,7 +44,7 @@ export default function UserProfile() {
         <Avatar uri={user.avatar} name={user.name} size={92} />
         <Text style={[font.h2, { marginTop: 12 }]}>{user.name}</Text>
         <View style={{ marginTop: 8 }}>
-          <LocationBadge district={user.district} neighborhood={user.neighborhood} />
+          <LocationBadge province={user.province} district={user.district} neighborhood={user.neighborhood} />
         </View>
         {!!user.bio && <Text style={[font.body, { textAlign: 'center', marginTop: 12 }]}>{user.bio}</Text>}
         <View style={{ flexDirection: 'row', gap: 26, marginTop: 16 }}>

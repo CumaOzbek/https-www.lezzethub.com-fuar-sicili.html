@@ -10,7 +10,7 @@ import { PhotoCarousel } from '../../components/photos';
 import { ReportSheet } from '../../components/ReportSheet';
 import { Avatar, Badge, Button, Card, EmptyState, Header, InfoRow, LocationBadge, Notice, Row, StickyFooter } from '../../components/ui';
 import { calcBreakdown } from '../../lib/commission';
-import { tl } from '../../lib/format';
+import { DELIVERY_LABEL, SHIPPING_PAYER_LABEL, shippingPayerText, tl } from '../../lib/format';
 import { canSharePhoto, shareListing, shareListingPhoto } from '../../lib/share';
 import { useBlockedIds, useStore } from '../../lib/store';
 import { colors, font, radius, shadowSoft } from '../../lib/theme';
@@ -38,7 +38,9 @@ export default function ListingDetail() {
   const isAdmin = me?.role === 'admin';
   const isBlocked = blocked.has(seller.id);
   const cat = categoryOf(listing.category);
-  const otherDistrict = me && !isOwner && me.district !== listing.district;
+  const otherProvince = !!me && !isOwner && me.province !== listing.province;
+  const otherDistrict = !!me && !isOwner && !otherProvince && me.district !== listing.district;
+  const ships = listing.delivery.filter((d) => d !== 'pickup');
   const buyerPrice = calcBreakdown(listing.price, 1).buyerTotal;
   const more = db.listings.filter((l) => l.ownerId === seller.id && l.id !== listing.id && l.status === 'active').slice(0, 3);
   const available = listing.status === 'active' && seller.active && !isBlocked;
@@ -89,7 +91,7 @@ export default function ListingDetail() {
             <Text style={[font.h1, { marginTop: 10 }]}>{listing.title}</Text>
             <Row style={{ marginTop: 8, justifyContent: 'space-between' }}>
               <Text style={styles.price}>{tl(listing.price)}</Text>
-              <LocationBadge district={listing.district} neighborhood={listing.neighborhood} />
+              <LocationBadge province={listing.province} district={listing.district} neighborhood={listing.neighborhood} />
             </Row>
             <Text style={[font.body, { marginTop: 14 }]}>{listing.description}</Text>
 
@@ -105,6 +107,18 @@ export default function ListingDetail() {
                   </View>
                 </View>
               </View>
+              {ships.length > 0 && (
+                <>
+                  <View style={styles.infoDivider} />
+                  <InfoRow
+                    icon={listing.shippingPayer === 'seller' ? 'gift-outline' : 'wallet-outline'}
+                    label={`${ships.map((d) => DELIVERY_LABEL[d]).join(' / ')} ücreti · ${SHIPPING_PAYER_LABEL[listing.shippingPayer]}`}
+                    value={shippingPayerText(ships.includes('cargo') ? 'cargo' : 'courier', listing.shippingPayer)}
+                  />
+                </>
+              )}
+              <View style={styles.infoDivider} />
+              <InfoRow icon="shield-checkmark-outline" label="Satıcı doğrulaması" value="E-Devlet onaylı hijyen belgesi LezzetHub tarafından kontrol edildi" />
             </Card>
 
             {isOwner && (
@@ -132,6 +146,19 @@ export default function ListingDetail() {
               </Card>
             )}
 
+            {otherProvince && (
+              <View style={{ marginTop: 14 }}>
+                <Notice
+                  title="Farklı ildeki satıcı"
+                  text={
+                    listing.delivery.includes('cargo')
+                      ? `Satıcı ${listing.province} ilinde. Bu ilan kargoyla ${me!.province} iline gönderilebilir.`
+                      : `Satıcı ${listing.province} ilinde ve kargo ile gönderim yapmıyor. Yalnızca elden teslim veya yerel kurye ile alınabilir.`
+                  }
+                  icon="navigate-circle-outline"
+                />
+              </View>
+            )}
             {otherDistrict && (
               <View style={{ marginTop: 14 }}>
                 <Notice
@@ -153,7 +180,7 @@ export default function ListingDetail() {
                 <Avatar uri={seller.avatar} name={seller.name} size={52} />
                 <View style={{ flex: 1 }}>
                   <Text style={font.h3}>{seller.name}</Text>
-                  <LocationBadge district={seller.district} neighborhood={seller.neighborhood} compact />
+                  <LocationBadge province={seller.province} district={seller.district} neighborhood={seller.neighborhood} compact />
                   {!!seller.availability && (
                     <Text style={[font.small, { marginTop: 2 }]} numberOfLines={1}>
                       🕒 {seller.availability}

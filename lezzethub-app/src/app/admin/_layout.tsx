@@ -19,7 +19,8 @@ export default function AdminLayout() {
   // Çıkış yapıldığında ana sayfaya dön (AdminHeader da '/' adresine yönlendirir).
   if (!me) return <Redirect href="/" />;
   if (me.role !== 'admin') return <Redirect href="/" />;
-  const pending = db.payments.filter((p) => p.status === 'pending').length;
+  const pendingVerifications = db.verifications.filter((v) => v.status === 'pending').length;
+  const payoutDue = db.orders.filter((o) => o.status === 'completed' && o.payoutStatus === 'pending').length;
   const openReports = db.reports.filter((r) => r.status === 'open').length;
 
   return (
@@ -29,17 +30,18 @@ export default function AdminLayout() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
         tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.line, height: 58 + bottomInset, paddingTop: 6, paddingBottom: bottomInset },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
+        tabBarLabelStyle: { fontSize: 10.5, fontWeight: '700' },
         tabBarLabelPosition: 'below-icon',
         tabBarBadgeStyle: { backgroundColor: colors.accent, fontSize: 10 },
         sceneStyle: { backgroundColor: colors.cream },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'İstatistik', tabBarIcon: icon('stats-chart', 'stats-chart-outline') }} />
-      <Tabs.Screen name="payments" options={{ title: 'Ödemeler', tabBarIcon: icon('card', 'card-outline'), tabBarBadge: pending || undefined }} />
+      <Tabs.Screen name="index" options={{ title: 'Özet', tabBarIcon: icon('stats-chart', 'stats-chart-outline') }} />
+      <Tabs.Screen name="verifications" options={{ title: 'Onaylar', tabBarIcon: icon('document-text', 'document-text-outline'), tabBarBadge: pendingVerifications || undefined }} />
+      <Tabs.Screen name="payments" options={{ title: 'Ödeme', tabBarIcon: icon('card', 'card-outline'), tabBarBadge: payoutDue || undefined }} />
       <Tabs.Screen name="users" options={{ title: 'Üyeler', tabBarIcon: icon('people', 'people-outline') }} />
       <Tabs.Screen name="listings" options={{ title: 'İlanlar', tabBarIcon: icon('restaurant', 'restaurant-outline') }} />
-      <Tabs.Screen name="reports" options={{ title: 'Şikayetler', tabBarIcon: icon('flag', 'flag-outline'), tabBarBadge: openReports || undefined }} />
+      <Tabs.Screen name="reports" options={{ title: 'Şikayet', tabBarIcon: icon('flag', 'flag-outline'), tabBarBadge: openReports || undefined }} />
     </Tabs>
   );
 }

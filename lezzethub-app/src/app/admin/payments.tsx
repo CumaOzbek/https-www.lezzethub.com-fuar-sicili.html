@@ -1,97 +1,162 @@
+import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { AdminHeader } from '../../components/AdminHeader';
-import { PriceBreakdown } from '../../components/domain';
 import { useFeedback } from '../../components/feedback';
-import { Badge, Button, Card, EmptyState, Row, Screen, Segmented } from '../../components/ui';
-import { calcBreakdown } from '../../lib/commission';
-import { DELIVERY_LABEL, appointmentText, timeAgo, tl } from '../../lib/format';
+import { Badge, Button, Card, EmptyState, Notice, Row, Screen, Segmented } from '../../components/ui';
+import { formatIban, payoutSummary } from '../../lib/api';
+import { STATUS_META, chatTime, timeAgo, tl } from '../../lib/format';
 import { useStore } from '../../lib/store';
 import { colors, font } from '../../lib/theme';
 import type { PaymentStatus } from '../../lib/types';
 
-const TONE: Record<PaymentStatus, { label: string; tone: 'yellow' | 'green' | 'red' }> = {
-  pending: { label: 'Onay bekliyor', tone: 'yellow' },
-  approved: { label: 'Onaylandı', tone: 'green' },
-  rejected: { label: 'Reddedildi', tone: 'red' },
+const TONE: Record<PaymentStatus, { label: string; tone: 'yellow' | 'green' | 'red' | 'gray' }> = {
+  pending: { label: 'Bekliyor', tone: 'yellow' },
+  succeeded: { label: 'Başarılı', tone: 'green' },
+  failed: { label: 'Başarısız', tone: 'red' },
+  refunded: { label: 'İade edildi', tone: 'gray' },
 };
 
 export default function AdminPayments() {
-  const { db, me, actions } = useStore();
-  const { run, confirm } = useFeedback();
-  const [tab, setTab] = useState<'pending' | 'history'>('pending');
+  const { db, me, mode, actions } = useStore();
+  const { run, confirm, toast } = useFeedback();
+  const [tab, setTab] = useState<'payouts' | 'transactions'>('payouts');
+  const payouts = useMemo(() => payoutSummary(db), [db]);
   if (!me) return null;
 
-  const list = db.payments.filter((p) => (tab === 'pending' ? p.status === 'pending' : p.status !== 'pending'));
   const name = (id: string) => db.users.find((u) => u.id === id)?.name ?? 'Silinmiş kullanıcı';
 
-  const decide = async (orderId: string, approve: boolean) => {
+  const markPaid = async (sellerName: string, orderIds: string[], total: number) => {
     const r = await confirm({
-      title: approve ? 'Ödemeyi onayla' : 'Ödemeyi reddet',
-      message: approve ? 'Ödeme onaylanacak; alıcı ve satıcıya bildirim gönderilecek.' : 'Sipariş reddedildi olarak işaretlenecek.',
-      confirmText: approve ? 'Onayla' : 'Reddet',
-      destructive: !approve,
-      inputPlaceholder: approve ? undefined : 'Red gerekçesi (isteğe bağlı)',
+      title: 'Satıcı ödemesini işaretle',
+      message: `${sellerName} için ${tl(total)} tutarındaki havale/EFT’yi yaptıysan onayla. Satıcıya bildirim gönderilecek.`,
+      confirmText: 'Aktarıldı',
     });
-    if (r.ok) {
-      await run(() => actions.orderAction(orderId, approve ? 'paymentApprove' : 'paymentReject', r.note || undefined), approve ? 'Ödeme onaylandı ✅' : 'Ödeme reddedildi');
-    }
+    if (r.ok) await run(() => actions.adminMarkPayout(orderIds), 'Satıcı ödemesi işaretlendi 💸');
   };
 
+  const refund = async (orderId: string, amount: number) => {
+    const r = await confirm({
+      title: 'İade et',
+      message: `${tl(amount)} alıcının kartına iade edilecek ve sipariş iptal edilecek.`,
+      confirmText: 'İade Et',
+      destructive: true,
+      inputPlaceholder: 'İade gerekçesi',
+    });
+    if (r.ok) await run(() => actions.adminRefundOrder(orderId, r.note), 'Ödeme iade edildi');
+  };
+
+  const payments = [...db.payments].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
   return (
-    <Screen header={<AdminHeader title="Ödeme Onayları" subtitle="Uygulama içi ödeme yok — yalnızca onay / red işaretlemesi" />}>
+    <Screen header={<AdminHeader title="Ödemeler" subtitle={mode === 'local' ? 'Demo: test kartı ödemeleri' : 'iyzico online ödemeler ve satıcı aktarımları'} />}>
       <Segmented
         value={tab}
         onChange={setTab}
         options={[
-          { value: 'pending', label: 'Bekleyen', count: db.payments.filter((p) => p.status === 'pending').length },
-          { value: 'history', label: 'Geçmiş', count: db.payments.filter((p) => p.status !== 'pending').length },
+          { value: 'payouts', label: 'Satıcı ödemeleri', count: payouts.length },
+          { value: 'transactions', label: 'İşlemler', count: payments.length },
         ]}
       />
       <View style={{ height: 14 }} />
-      {list.length === 0 && <EmptyState emoji="✅" title={tab === 'pending' ? 'Bekleyen ödeme yok' : 'Henüz karar verilmiş ödeme yok'} />}
-      {list.map((p) => {
-        const o = db.orders.find((x) => x.id === p.orderId);
-        if (!o) return null;
-        return (
-          <Card key={p.id} style={{ marginBottom: 14 }}>
-            <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <View style={{ flex: 1 }}>
-                <Text style={font.h3} numberOfLines={1} onPress={() => router.push(`/order/${o.id}`)}>
-                  {o.listingTitle}
+
+      {tab === 'payouts' && (
+        <>
+          <Notice
+            tone="teal"
+            icon="information-circle-outline"
+            text="Tamamlanan siparişlerin satıcı net tutarı (%15 hizmet bedeli düşülmüş) aşağıda satıcı bazında listelenir. Havale/EFT’yi yaptıktan sonra “Aktarıldı” olarak işaretle."
+          />
+          <View style={{ height: 12 }} />
+          {payouts.length === 0 && <EmptyState emoji="✅" title="Bekleyen satıcı ödemesi yok" />}
+          {payouts.map((p) => (
+            <Card key={p.sellerId} style={{ marginBottom: 14 }}>
+              <Row style={{ justifyContent: 'space-between' }}>
+                <Text style={[font.h3, { flex: 1 }]} numberOfLines={1}>
+                  {p.seller?.name ?? 'Silinmiş kullanıcı'}
                 </Text>
-                <Text style={font.small}>
-                  {o.code} · {timeAgo(p.createdAt)}
-                </Text>
-              </View>
-              <Badge label={TONE[p.status].label} tone={TONE[p.status].tone} />
-            </Row>
-            <View style={{ marginTop: 10, gap: 3 }}>
-              <Text style={{ color: colors.inkSoft }}>🛍 Alıcı: {name(o.buyerId)}</Text>
-              <Text style={{ color: colors.inkSoft }}>👩‍🍳 Satıcı: {name(o.sellerId)}</Text>
-              <Text style={{ color: colors.inkSoft }}>
-                🗓 {appointmentText(o.appointment)} · {DELIVERY_LABEL[o.delivery]}
-              </Text>
-            </View>
-            <View style={{ marginTop: 12 }}>
-              <PriceBreakdown b={calcBreakdown(o.unitPrice, o.quantity)} unitPrice={o.unitPrice} quantity={o.quantity} perspective="admin" />
-            </View>
-            {p.status === 'pending' ? (
-              <Row gap={10} style={{ marginTop: 14 }}>
-                <Button title="Reddet" icon="close" variant="danger" style={{ flex: 1 }} onPress={() => decide(o.id, false)} />
-                <Button title={`Onayla · ${tl(p.amount)}`} icon="checkmark" variant="success" style={{ flex: 2 }} onPress={() => decide(o.id, true)} />
+                <Text style={{ fontWeight: '900', color: colors.success, fontSize: 18 }}>{tl(p.total)}</Text>
               </Row>
-            ) : (
-              <Text style={[font.small, { marginTop: 10 }]}>
-                Karar: {p.decidedAt ? timeAgo(p.decidedAt) : '—'}
-                {p.adminNote ? ` · Not: ${p.adminNote}` : ''}
-              </Text>
-            )}
-          </Card>
-        );
-      })}
+              {p.verification?.iban ? (
+                <Row style={{ marginTop: 8, justifyContent: 'space-between' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.ink, fontWeight: '700', letterSpacing: 0.5 }}>{formatIban(p.verification.iban)}</Text>
+                    <Text style={font.small}>{p.verification.ibanHolder}</Text>
+                  </View>
+                  <Button
+                    title="Kopyala"
+                    icon="copy-outline"
+                    small
+                    variant="ghost"
+                    onPress={() => Clipboard.setStringAsync(p.verification!.iban!).then(() => toast('IBAN kopyalandı', 'success'))}
+                  />
+                </Row>
+              ) : (
+                <Text style={[font.small, { color: colors.danger, marginTop: 8 }]}>Onaylı IBAN bulunamadı.</Text>
+              )}
+              <View style={{ marginTop: 10, gap: 4 }}>
+                {p.orders.map((o) => (
+                  <Text key={o.id} style={font.small} onPress={() => router.push(`/order/${o.id}`)}>
+                    • {o.code} · {o.listingTitle} · {tl(o.sellerNet)}
+                  </Text>
+                ))}
+              </View>
+              <Button
+                title="Aktarıldı olarak işaretle"
+                icon="checkmark-done"
+                variant="success"
+                disabled={!p.verification?.iban}
+                onPress={() => markPaid(p.seller?.name ?? 'Satıcı', p.orders.map((o) => o.id), p.total)}
+                style={{ marginTop: 12 }}
+              />
+            </Card>
+          ))}
+        </>
+      )}
+
+      {tab === 'transactions' && (
+        <>
+          {payments.length === 0 && <EmptyState emoji="💳" title="Henüz ödeme yok" />}
+          {payments.map((p) => {
+            const o = db.orders.find((x) => x.id === p.orderId);
+            if (!o) return null;
+            return (
+              <Card key={p.id} style={{ marginBottom: 12 }} onPress={() => router.push(`/order/${o.id}`)}>
+                <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={font.h3} numberOfLines={1}>
+                      {o.listingTitle}
+                    </Text>
+                    <Text style={font.small}>
+                      {o.code} · {timeAgo(p.createdAt)} · {STATUS_META[o.status].label}
+                    </Text>
+                  </View>
+                  <Badge label={TONE[p.status].label} tone={TONE[p.status].tone} />
+                </Row>
+                <Text style={{ color: colors.inkSoft, marginTop: 8 }}>
+                  🛍 {name(o.buyerId)} → 👩‍🍳 {name(o.sellerId)}
+                </Text>
+                <Text style={{ color: colors.ink, fontWeight: '800', marginTop: 4 }}>
+                  {tl(p.amount)} · {p.cardAssociation?.replace('_', ' ') ?? 'Kart'}
+                  {p.cardLast4 ? ` •••• ${p.cardLast4}` : ''} · {p.provider === 'test' ? 'Test' : 'iyzico'}
+                </Text>
+                {!!p.errorMessage && p.status === 'failed' && <Text style={[font.small, { color: colors.danger, marginTop: 2 }]}>{p.errorMessage}</Text>}
+                {p.status === 'refunded' && (
+                  <Text style={[font.small, { marginTop: 2 }]}>
+                    İade: {p.refundedAt ? chatTime(p.refundedAt) : '—'}
+                    {p.refundNote ? ` · ${p.refundNote}` : ''}
+                  </Text>
+                )}
+                {p.status === 'succeeded' && o.status === 'paid' && (
+                  <Button title="İptal et ve iade yap" icon="return-down-back-outline" variant="danger" small onPress={() => refund(o.id, p.amount)} style={{ marginTop: 10, alignSelf: 'flex-start' }} />
+                )}
+              </Card>
+            );
+          })}
+        </>
+      )}
     </Screen>
   );
 }

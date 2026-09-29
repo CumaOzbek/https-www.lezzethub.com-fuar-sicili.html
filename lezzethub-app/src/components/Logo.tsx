@@ -40,7 +40,7 @@ export function Logo({ size = 40, inverted = false, tagline = false }: { size?: 
         </View>
         {tagline && (
           <Text style={{ fontSize: size * 0.24, color: inverted ? 'rgba(250,247,242,0.8)' : colors.muted, marginTop: 1 }}>
-            Hatay’ın ev lezzetleri, mahallenden
+            Türkiye’nin ev lezzetleri, mahallenden
           </Text>
         )}
       </View>

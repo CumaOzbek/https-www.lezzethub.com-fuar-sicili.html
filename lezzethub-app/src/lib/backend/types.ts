@@ -1,7 +1,13 @@
 import type * as api from '../api';
-import type { DB, Listing, Order, User } from '../types';
+import type { DB, Listing, Order, User, Verification } from '../types';
 
 export type ProfileUpdate = api.ProfileInput;
+
+/** Online ödeme sonucu. 'redirected': web'de ödeme sayfasına yönlendirildi, sonuç /payment-result ekranında. */
+export interface PaymentOutcome {
+  status: 'success' | 'failure' | 'cancelled' | 'redirected';
+  message: string;
+}
 
 export interface RegisterResult {
   /** Oturum açıldıysa kullanıcı; e-posta doğrulaması bekleniyorsa null. */
@@ -39,12 +45,25 @@ export interface Backend {
   deleteAccount(): Promise<void>;
   updateProfile(input: ProfileUpdate): Promise<void>;
 
+  /** Satıcı başvurusu: e-Devlet onaylı hijyen belgesi + IBAN + zorunlu beyan ve açık rıza. */
+  submitSellerApplication(input: api.SellerApplicationInput): Promise<void>;
+  /** Kurye başvurusu: A2/B ehliyet + hizmet bölgesi + zorunlu beyan ve açık rıza. */
+  submitCourierApplication(input: api.CourierApplicationInput): Promise<void>;
+  updateCourierProfile(patch: api.CourierUpdate): Promise<void>;
+  /** Belgeyi görüntülemek için adres (canlı modda kısa süreli imzalı bağlantı). */
+  documentUrl(verification: Verification): Promise<string>;
+
   saveListing(input: api.ListingInput, listingId?: string): Promise<Listing>;
   setListingStatus(listingId: string, status: Listing['status']): Promise<void>;
   deleteListing(listingId: string): Promise<void>;
 
   createOrder(input: api.OrderInput): Promise<Order>;
   orderAction(orderId: string, action: api.OrderAction, note?: string): Promise<void>;
+  setShipment(orderId: string, company: string, trackingCode: string): Promise<void>;
+  /** Canlı mod: iyzico ortak ödeme sayfasıyla online ödeme. */
+  payOnline?(orderId: string): Promise<PaymentOutcome>;
+  /** Demo modu: test kartıyla ödeme simülasyonu. */
+  payWithTestCard?(orderId: string, card: api.TestCardInput): Promise<void>;
   sendMessage(orderId: string, text: string): Promise<void>;
   markChatRead(orderId: string): Promise<void>;
   markNotificationsRead(): Promise<void>;
@@ -57,6 +76,11 @@ export interface Backend {
   adminSetUserRole(userId: string, role: User['role']): Promise<void>;
   adminDeleteUser(userId: string): Promise<void>;
   adminResolveReport(reportId: string): Promise<void>;
+  adminReviewVerification(verificationId: string, approve: boolean, note: string): Promise<void>;
+  /** Ödenmiş siparişi iptal edip tutarı karta iade eder. */
+  adminRefundOrder(orderId: string, note: string): Promise<void>;
+  /** Tamamlanan siparişlerin satıcı kazancının IBAN'a aktarıldığını işaretler. */
+  adminMarkPayout(orderIds: string[]): Promise<void>;
 
   /** Yalnızca yerel modda: demo verilerini başlangıç haline döndürür. */
   resetDemo?(): Promise<void>;

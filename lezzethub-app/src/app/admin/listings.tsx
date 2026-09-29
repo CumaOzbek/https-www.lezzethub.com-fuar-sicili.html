@@ -7,7 +7,7 @@ import { ListingImage } from '../../components/domain';
 import { useFeedback } from '../../components/feedback';
 import { Badge, Button, Card, Chip, EmptyState, Field, LocationBadge, Row, Screen } from '../../components/ui';
 import { tl } from '../../lib/format';
-import { matchesText } from '../../lib/hatay';
+import { matchesText } from '../../lib/locations';
 import { useStore } from '../../lib/store';
 import { colors, font } from '../../lib/theme';
 
@@ -20,7 +20,7 @@ export default function AdminListings() {
 
   const owner = (id: string) => db.users.find((u) => u.id === id);
   const list = db.listings.filter(
-    (l) => (filter === 'all' || l.status === filter) && (!q.trim() || matchesText(`${l.title} ${owner(l.ownerId)?.name ?? ''} ${l.district} ${l.neighborhood}`, q)),
+    (l) => (filter === 'all' || l.status === filter) && (!q.trim() || matchesText(`${l.title} ${owner(l.ownerId)?.name ?? ''} ${l.province} ${l.district} ${l.neighborhood}`, q)),
   );
 
   return (
@@ -45,7 +45,7 @@ export default function AdminListings() {
               <Text style={font.small}>
                 {owner(l.ownerId)?.name ?? '—'} · <Text style={{ color: colors.primaryDark, fontWeight: '800' }}>{tl(l.price)}</Text>
               </Text>
-              <LocationBadge district={l.district} neighborhood={l.neighborhood} compact />
+              <LocationBadge province={l.province} district={l.district} neighborhood={l.neighborhood} compact />
               <Row gap={6} style={{ marginTop: 4 }}>
                 <Badge label={l.status === 'active' ? 'Yayında' : 'Pasif'} tone={l.status === 'active' ? 'green' : 'gray'} />
                 {l.removedByAdmin && <Badge label="Admin kaldırdı" tone="red" />}

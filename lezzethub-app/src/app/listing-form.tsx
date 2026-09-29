@@ -5,12 +5,13 @@ import { KeyboardAvoidingView, Platform, Text, View } from 'react-native';
 import { LoginRequired } from '../components/domain';
 import { useFeedback } from '../components/feedback';
 import { PhotoManager } from '../components/photos';
-import { Button, Card, Chip, Field, Header, LocationBadge, Notice, Row, Screen, StickyFooter, Toggle } from '../components/ui';
+import { Button, Card, Chip, EmptyState, Field, Header, LocationBadge, Notice, Row, Screen, StickyFooter, Toggle } from '../components/ui';
 import { calcBreakdown } from '../lib/commission';
-import { tl } from '../lib/format';
+import { VERIFICATION_LABEL, shippingPayerText, tl } from '../lib/format';
 import { useStore } from '../lib/store';
 import { colors, font } from '../lib/theme';
-import { CATEGORIES, type CategoryKey, type DeliveryMethod } from '../lib/types';
+import { canSell } from '../lib/api';
+import { CATEGORIES, type CategoryKey, type DeliveryMethod, type ShippingPayer } from '../lib/types';
 
 export default function ListingForm() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -25,6 +26,7 @@ export default function ListingForm() {
   const [images, setImages] = useState<string[]>(existing?.images ?? []);
   const [prepTime, setPrepTime] = useState(existing?.prepTime ?? '');
   const [delivery, setDelivery] = useState<DeliveryMethod[]>(existing?.delivery ?? ['pickup']);
+  const [shippingPayer, setShippingPayer] = useState<ShippingPayer>(existing?.shippingPayer ?? 'buyer');
   const [active, setActive] = useState(existing ? existing.status === 'active' : true);
   const [saving, setSaving] = useState(false);
 
@@ -37,6 +39,31 @@ export default function ListingForm() {
     );
   }
 
+  // Hijyen belgesi onaylanmadan ilan verilemez.
+  if (!canSell(me)) {
+    const pending = me.sellerStatus === 'pending';
+    return (
+      <View style={{ flex: 1 }}>
+        <Header title="İlan Ver" />
+        <Screen>
+          <EmptyState
+            emoji={pending ? '⏳' : '📄'}
+            title={pending ? 'Satıcı başvurun inceleniyor' : 'Önce satıcı başvurusu gerekiyor'}
+            text={
+              pending
+                ? 'Hijyen belgen onaylandığında ilan verebileceksin. Sonucu bildirim olarak göndereceğiz.'
+                : `Satış yapabilmek için e-Devlet onaylı hijyen belgeni yüklemeli ve mevzuat beyanını onaylamalısın. Durum: ${VERIFICATION_LABEL[me.sellerStatus]}.`
+            }
+            action={pending ? 'Başvuruyu görüntüle' : 'Satıcı başvurusu yap'}
+            onAction={() => router.push('/apply/seller')}
+          />
+        </Screen>
+      </View>
+    );
+  }
+
+  const shipping = delivery.includes('courier') || delivery.includes('cargo');
+
   const toggleDelivery = (m: DeliveryMethod, on: boolean) =>
     setDelivery((d) => (on ? Array.from(new Set([...d, m])) : d.filter((x) => x !== m)));
 
@@ -47,7 +74,7 @@ export default function ListingForm() {
     setSaving(true);
     await run(async () => {
       const l = await actions.saveListing(
-        { title, description, price: priceNum, category, images, prepTime, delivery, status: active ? 'active' : 'passive' },
+        { title, description, price: priceNum, category, images, prepTime, delivery, shippingPayer, status: active ? 'active' : 'passive' },
         existing?.id,
       );
       router.replace(`/listing/${l.id}`);
@@ -106,9 +133,24 @@ export default function ListingForm() {
         </Card>
 
         <Text style={[font.h3, { marginTop: 20, marginBottom: 10 }]}>Teslimat seçenekleri</Text>
-        <Toggle label="Kurye" description="Alıcının adresine kuryeyle gönderim" icon="bicycle" value={delivery.includes('courier')} onChange={(v) => toggleDelivery('courier', v)} />
         <Toggle label="Elden Teslim" description="Alıcı adresinden teslim alır" icon="hand-left-outline" value={delivery.includes('pickup')} onChange={(v) => toggleDelivery('pickup', v)} />
+        <Toggle label="Kurye" description="Yakın mahallelere kuryeyle gönderim (Kurye Bul’dan onaylı kurye bulabilirsin)" icon="bicycle" value={delivery.includes('courier')} onChange={(v) => toggleDelivery('courier', v)} />
+        <Toggle label="Kargo" description="Türkiye’nin her yerine kargoyla gönderim (bozulmayan ürünler için)" icon="cube-outline" value={delivery.includes('cargo')} onChange={(v) => toggleDelivery('cargo', v)} />
         {delivery.length === 0 && <Notice tone="red" icon="alert-circle-outline" text="En az bir teslimat seçeneği seçmelisin." />}
+        {shipping && (
+          <Card style={{ marginTop: 4 }}>
+            <Text style={[font.h3, { marginBottom: 4 }]}>Kurye / kargo ücreti kime ait?</Text>
+            <Text style={[font.small, { marginBottom: 10 }]}>Gönderim ücretini ve organizasyonunu kimin üstleneceğini seç. Alıcı bunu sipariş vermeden önce görür.</Text>
+            <Row gap={8} style={{ flexWrap: 'wrap' }}>
+              <Chip label="Alıcı öder" icon="person-outline" active={shippingPayer === 'buyer'} onPress={() => setShippingPayer('buyer')} />
+              <Chip label="Satıcı öder (ücretsiz gönderim)" icon="gift-outline" active={shippingPayer === 'seller'} onPress={() => setShippingPayer('seller')} />
+            </Row>
+            <Text style={[font.small, { marginTop: 10 }]}>{shippingPayerText(delivery.includes('cargo') ? 'cargo' : 'courier', shippingPayer)}</Text>
+            {delivery.includes('cargo') && (
+              <Text style={[font.small, { marginTop: 6, color: colors.warning }]}>Kargoda soğuk zincir gerektiren ve çabuk bozulan yemekleri göndermeyin; sağlam ve kapalı ambalaj kullanın.</Text>
+            )}
+          </Card>
+        )}
 
         <Text style={[font.h3, { marginTop: 20, marginBottom: 10 }]}>Durum</Text>
         <Toggle
@@ -123,7 +165,7 @@ export default function ListingForm() {
         <Card style={{ marginTop: 10, padding: 14 }}>
           <Row style={{ justifyContent: 'space-between' }}>
             <Text style={font.small}>İlan konumu (profilinden otomatik)</Text>
-            <LocationBadge district={me.district} neighborhood={me.neighborhood} />
+            <LocationBadge province={me.province} district={me.district} neighborhood={me.neighborhood} />
           </Row>
         </Card>
 

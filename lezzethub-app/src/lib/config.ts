@@ -15,3 +15,6 @@ export const SUPPORT_EMAIL = process.env.EXPO_PUBLIC_SUPPORT_EMAIL ?? 'destek@le
 
 /** Supabase Storage'daki fotoğraf kovasının adı. */
 export const PHOTO_BUCKET = 'photos';
+
+/** Hijyen belgesi ve ehliyet gibi belgelerin tutulduğu ÖZEL kova (yalnızca sahibi ve adminler okur). */
+export const DOCUMENT_BUCKET = 'documents';
