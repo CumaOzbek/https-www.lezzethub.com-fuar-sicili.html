@@ -96,7 +96,7 @@ await q(`update profiles set seller_status = 'approved' where id = $1`, [seller]
 await as(buyer);
 await q(`select update_profile('Mehmet Ali Kaya','','İzmir','Bornova','Kazımdirik','Kazımdirik Mah. 100. Sok. No:5','0532 111 22 33','',null)`);
 await as(seller);
-const listing = (await q(`select * from save_listing(null,'Boyoz','Sabah fırından çıkma boyoz',25,'hamur-isi','{}','','{pickup,cargo}','buyer','active')`))[0];
+const listing = (await q(`select * from save_listing(null,'Boyoz','Sabah fırından çıkma boyoz',25,'hamur-isi','{}','','{pickup,cargo}','buyer','{sut}',false,'Buzdolabında 2 gün',true,true,'active')`))[0];
 const future = new Date(Date.now() + 86400000).toISOString();
 const newApprovedOrder = async (delivery = 'pickup', addr = '') => {
   await as(buyer);

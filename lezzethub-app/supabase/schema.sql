@@ -73,6 +73,8 @@ create table if not exists public.profiles (
   availability text not null default '' check (char_length(availability) <= 120),
   seller_status text not null default 'none' check (seller_status in ('none','pending','approved','rejected')),
   courier_status text not null default 'none' check (courier_status in ('none','pending','approved','rejected')),
+  -- Tarım ve Orman Bakanlığı gıda işletmesi kayıt numarası (satıcı onayında doldurulur, herkese açık).
+  food_registration_no text,
   created_at timestamptz not null default now()
 );
 
@@ -96,6 +98,7 @@ create table if not exists public.verifications (
   doc_type text not null check (doc_type in ('image','pdf')),
   doc_number text not null,        -- satıcı: e-Devlet barkod no, kurye: ehliyet belge no
   license_class text check (license_class in ('A2','B')),
+  food_registration_no text,
   iban text,
   iban_holder text,
   declaration_at timestamptz,
@@ -130,8 +133,15 @@ create table if not exists public.listings (
   prep_time text not null default '' check (char_length(prep_time) <= 120),
   delivery text[] not null check (cardinality(delivery) >= 1 and delivery <@ array['pickup','courier','cargo']::text[]),
   shipping_payer text not null default 'buyer' check (shipping_payer in ('buyer','seller')),
+  -- Gıda güvenliği: alerjen beyanı (boş = alerjen içermez beyanı), son tüketim/saklama, oda sıcaklığında dayanıklılık.
+  allergens text[] not null default '{}' check (allergens <@ array['gluten','sut','yumurta','kuruyemis','yerfistigi','susam','soya','balik','kabuklu','yumusakca','kereviz','hardal','acibakla','sulfit']::text[]),
+  shelf_life text not null default '' check (char_length(shelf_life) <= 160),
+  shelf_stable boolean not null default false,
+  safety_confirmed_at timestamptz,
   status text not null default 'active' check (status in ('active','passive')),
   removed_by_admin boolean not null default false,
+  -- Hijyen şikayeti nedeniyle otomatik yayından kaldırıldı; yalnızca admin geri açabilir.
+  under_review boolean not null default false,
   province text not null,
   district text not null,
   neighborhood text not null,
@@ -237,6 +247,19 @@ create table if not exists public.blocks (
   primary key (blocker_id, blocked_id),
   check (blocker_id <> blocked_id)
 );
+
+-- Önceki sürümden yükseltme: eksik sütunları ekle (yeni kurulumda etkisizdir).
+alter table public.profiles add column if not exists food_registration_no text;
+alter table public.verifications add column if not exists food_registration_no text;
+alter table public.listings add column if not exists allergens text[] not null default '{}';
+alter table public.listings add column if not exists shelf_life text not null default '';
+alter table public.listings add column if not exists shelf_stable boolean not null default false;
+alter table public.listings add column if not exists safety_confirmed_at timestamptz;
+alter table public.listings add column if not exists under_review boolean not null default false;
+
+-- Kargo yalnızca soğuk zincir gerektirmeyen ürünlerde (eski kayıtlar kontrol edilmez: NOT VALID).
+alter table public.listings drop constraint if exists listings_cargo_shelf_stable;
+alter table public.listings add constraint listings_cargo_shelf_stable check (not ('cargo' = any (delivery)) or shelf_stable) not valid;
 
 -- ---------------------------------------------------------------------
 -- Oturum ve bildirim yardımcıları
@@ -389,8 +412,9 @@ end $$;
 -- Satıcı ve kurye başvuruları
 -- ---------------------------------------------------------------------
 
+drop function if exists public.submit_seller_application(text, text, text, text, text, boolean, boolean);
 create or replace function public.submit_seller_application(
-  p_doc_path text, p_doc_type text, p_barcode text, p_iban text, p_iban_holder text,
+  p_doc_path text, p_doc_type text, p_barcode text, p_food_registration_no text, p_iban text, p_iban_holder text,
   p_accept_declaration boolean, p_accept_consent boolean
 ) returns void language plpgsql security definer set search_path = public as $$
 declare
@@ -401,13 +425,16 @@ begin
   if coalesce(p_doc_path, '') = '' or split_part(p_doc_path, '/', 1) <> me.id::text then perform _fail('E-Devlet onaylı hijyen belgeni yüklemelisin.'); end if;
   if p_doc_type not in ('image','pdf') then perform _fail('Belge fotoğraf veya PDF olmalıdır.'); end if;
   if char_length(regexp_replace(coalesce(p_barcode, ''), '\s', '', 'g')) < 8 then perform _fail('Belgenin e-Devlet doğrulama (barkod) numarasını girin.'); end if;
+  if coalesce(btrim(p_food_registration_no), '') !~ '^[A-Za-z0-9ÇĞİÖŞÜçğıöşü./ -]{5,40}$' or p_food_registration_no !~ '[0-9]{3,}' then
+    perform _fail('Gıda işletmesi kayıt numaranı girin (İl/İlçe Tarım ve Orman Müdürlüğü’nden alınır).');
+  end if;
   if v_iban is null then perform _fail('Geçerli bir TR IBAN girin (TR ile başlayan 26 karakter).'); end if;
   if char_length(btrim(coalesce(p_iban_holder, ''))) < 3 then perform _fail('IBAN sahibinin adını soyadını girin.'); end if;
   if not coalesce(p_accept_declaration, false) then perform _fail('Satış yapabilmek için mevzuat ve sorumluluk beyanını onaylamalısın.'); end if;
   if not coalesce(p_accept_consent, false) then perform _fail('Belgelerinin işlenmesine ilişkin açık rızayı onaylamalısın.'); end if;
   delete from verifications where user_id = me.id and kind = 'seller';
-  insert into verifications(user_id, kind, doc_path, doc_type, doc_number, iban, iban_holder, declaration_at, document_consent_at)
-  values (me.id, 'seller', p_doc_path, p_doc_type, btrim(p_barcode), v_iban, btrim(p_iban_holder), now(), now());
+  insert into verifications(user_id, kind, doc_path, doc_type, doc_number, food_registration_no, iban, iban_holder, declaration_at, document_consent_at)
+  values (me.id, 'seller', p_doc_path, p_doc_type, btrim(p_barcode), upper(btrim(p_food_registration_no)), v_iban, btrim(p_iban_holder), now(), now());
   update profiles set seller_status = 'pending' where id = me.id;
   perform _notify_admins('Yeni satıcı başvurusu 📄', me.name || ' hijyen belgesini yükledi; onay bekliyor.');
 end $$;
@@ -487,7 +514,10 @@ begin
   if v.status <> 'pending' then perform _fail('Bu başvuru zaten sonuçlandırıldı.'); end if;
   if not p_approve and btrim(coalesce(p_note, '')) = '' then perform _fail('Reddetme gerekçesini yazmalısın; kullanıcıya iletilecek.'); end if;
   update verifications set status = v_status, admin_note = nullif(btrim(coalesce(p_note, '')), ''), reviewed_at = now(), reviewed_by = me.id where id = p_id;
-  if v.kind = 'seller' then update profiles set seller_status = v_status where id = v.user_id;
+  if v.kind = 'seller' then
+    update profiles set seller_status = v_status,
+      food_registration_no = case when p_approve then v.food_registration_no else food_registration_no end
+    where id = v.user_id;
   else update profiles set courier_status = v_status where id = v.user_id; end if;
   v_what := case when v.kind = 'seller' then 'Satıcı' else 'Kurye' end;
   if p_approve then
@@ -502,13 +532,17 @@ end $$;
 -- İlanlar
 -- ---------------------------------------------------------------------
 
+drop function if exists public.save_listing(uuid, text, text, numeric, text, text[], text, text[], text, text);
 create or replace function public.save_listing(
   p_id uuid, p_title text, p_description text, p_price numeric, p_category text,
-  p_images text[], p_prep_time text, p_delivery text[], p_shipping_payer text, p_status text
+  p_images text[], p_prep_time text, p_delivery text[], p_shipping_payer text,
+  p_allergens text[], p_no_allergens boolean, p_shelf_life text, p_shelf_stable boolean, p_safety_confirmed boolean,
+  p_status text
 ) returns public.listings language plpgsql security definer set search_path = public as $$
 declare
   me profiles := _me();
   l listings;
+  v_allergens text[] := coalesce((select array_agg(distinct a) from unnest(p_allergens) a), '{}');
 begin
   if me.seller_status <> 'approved' then perform _fail('İlan verebilmek için satıcı başvurunun (hijyen belgesi) onaylanması gerekir.'); end if;
   if char_length(btrim(p_title)) < 3 then perform _fail('Başlık en az 3 karakter olmalıdır.'); end if;
@@ -517,21 +551,30 @@ begin
   if coalesce(cardinality(p_delivery), 0) = 0 then perform _fail('En az bir teslimat seçeneği seçmelisiniz.'); end if;
   if coalesce(p_shipping_payer, '') not in ('buyer','seller') then perform _fail('Kargo/kurye ücretinin kime ait olduğunu seçin.'); end if;
   if coalesce(cardinality(p_images), 0) > 6 then perform _fail('En fazla 6 fotoğraf ekleyebilirsin.'); end if;
+  if cardinality(v_allergens) = 0 and not coalesce(p_no_allergens, false) then perform _fail('Alerjenleri işaretle ya da ürünün alerjen içermediğini beyan et.'); end if;
+  if cardinality(v_allergens) > 0 and coalesce(p_no_allergens, false) then perform _fail('Alerjen seçtiysen “alerjen içermez” beyanını kaldır.'); end if;
+  if char_length(btrim(coalesce(p_shelf_life, ''))) < 3 then perform _fail('Son tüketim ve saklama bilgisini yaz (ör. “Buzdolabında 2 gün”).'); end if;
+  if 'cargo' = any (p_delivery) and not coalesce(p_shelf_stable, false) then perform _fail('Kargo yalnızca oda sıcaklığında dayanıklı, soğuk zincir gerektirmeyen ürünlerde seçilebilir.'); end if;
+  if not coalesce(p_safety_confirmed, false) then perform _fail('Ürünün yasaklı / yüksek riskli gıdalardan olmadığını onaylamalısın.'); end if;
 
   if p_id is null then
-    insert into listings(owner_id, title, description, price, category, images, prep_time, delivery, shipping_payer, status, province, district, neighborhood)
+    insert into listings(owner_id, title, description, price, category, images, prep_time, delivery, shipping_payer,
+                         allergens, shelf_life, shelf_stable, safety_confirmed_at, status, province, district, neighborhood)
     values (me.id, btrim(p_title), btrim(p_description), round(p_price, 2), p_category, coalesce(p_images, '{}'),
-            btrim(coalesce(p_prep_time, '')), p_delivery, p_shipping_payer, p_status, me.province, me.district, me.neighborhood)
+            btrim(coalesce(p_prep_time, '')), p_delivery, p_shipping_payer,
+            v_allergens, btrim(p_shelf_life), coalesce(p_shelf_stable, false), now(), p_status, me.province, me.district, me.neighborhood)
     returning * into l;
   else
     select * into l from listings where id = p_id for update;
     if l.id is null then perform _fail('İlan bulunamadı.'); end if;
     if l.owner_id <> me.id then perform _fail('Bu ilanı düzenleme yetkiniz yok.'); end if;
+    if l.under_review and p_status = 'active' then perform _fail('Bu ilan hijyen şikayeti nedeniyle incelemede; inceleme bitene kadar yayına alınamaz.'); end if;
     if l.removed_by_admin and p_status = 'active' then perform _fail('Bu ilan yönetici tarafından yayından kaldırıldı.'); end if;
     update listings set
       title = btrim(p_title), description = btrim(p_description), price = round(p_price, 2), category = p_category,
       images = coalesce(p_images, '{}'), prep_time = btrim(coalesce(p_prep_time, '')), delivery = p_delivery,
-      shipping_payer = p_shipping_payer, status = p_status, updated_at = now()
+      shipping_payer = p_shipping_payer, allergens = v_allergens, shelf_life = btrim(p_shelf_life),
+      shelf_stable = coalesce(p_shelf_stable, false), safety_confirmed_at = now(), status = p_status, updated_at = now()
     where id = p_id returning * into l;
   end if;
   return l;
@@ -546,12 +589,14 @@ begin
   select * into l from listings where id = p_id for update;
   if l.id is null then perform _fail('İlan bulunamadı.'); end if;
   if me.role = 'admin' then
-    update listings set status = p_status, removed_by_admin = (p_status = 'passive'), updated_at = now() where id = p_id;
+    update listings set status = p_status, removed_by_admin = (p_status = 'passive'),
+      under_review = case when p_status = 'active' then false else under_review end, updated_at = now() where id = p_id;
     if p_status = 'passive' and l.owner_id <> me.id then
       perform _notify(l.owner_id, 'İlanın yayından kaldırıldı', '“' || l.title || '” ilanı yönetici tarafından yayından kaldırıldı.');
     end if;
   else
     if l.owner_id <> me.id then perform _fail('Bu ilan üzerinde yetkiniz yok.'); end if;
+    if l.under_review and p_status = 'active' then perform _fail('Bu ilan hijyen şikayeti nedeniyle incelemede; inceleme bitene kadar yayına alınamaz.'); end if;
     if l.removed_by_admin and p_status = 'active' then perform _fail('Bu ilan yönetici tarafından yayından kaldırıldı.'); end if;
     if p_status = 'active' and me.seller_status <> 'approved' then perform _fail('İlanı yayına almak için satıcı başvurunun onaylı olması gerekir.'); end if;
     update listings set status = p_status, updated_at = now() where id = p_id;
@@ -836,9 +881,14 @@ $$;
 -- Şikayet ve engelleme
 -- ---------------------------------------------------------------------
 
+-- Hijyen şikayetinde otomatik yayından kaldırma eşiği: ürünü satın almış bir alıcıdan 1 şikayet
+-- veya 2 farklı kişiden şikayet.
 create or replace function public.report_content(p_target_type text, p_target_id uuid, p_reason text, p_note text) returns void
 language plpgsql security definer set search_path = public as $$
-declare me profiles := _me();
+declare
+  me profiles := _me();
+  l listings;
+  v_hold boolean := false;
 begin
   if p_target_type = 'listing' and not exists (select 1 from listings where id = p_target_id) then perform _fail('Şikayet edilen içerik bulunamadı.'); end if;
   if p_target_type = 'user' and not exists (select 1 from profiles where id = p_target_id) then perform _fail('Şikayet edilen içerik bulunamadı.'); end if;
@@ -848,7 +898,39 @@ begin
   end if;
   insert into reports(reporter_id, target_type, target_id, reason, note)
   values (me.id, p_target_type, p_target_id, p_reason, left(btrim(coalesce(p_note, '')), 500));
+
+  if p_target_type = 'listing' and p_reason = 'hygiene' then
+    select * into l from listings where id = p_target_id for update;
+    v_hold := exists (select 1 from orders where listing_id = p_target_id and buyer_id = me.id and status in ('paid','completed'))
+      or (select count(distinct reporter_id) from reports where target_id = p_target_id and reason = 'hygiene' and status = 'open') >= 2;
+    if v_hold and not l.under_review then
+      update listings set under_review = true, status = 'passive', updated_at = now() where id = l.id;
+      perform _notify(l.owner_id, 'İlanın incelemeye alındı ⚠️',
+        '“' || l.title || '” hakkında hijyen / gıda güvenliği şikayeti geldi. İlan inceleme bitene kadar yayından kaldırıldı; yönetici seninle iletişime geçebilir.');
+      perform _notify_admins('ACİL: Hijyen şikayeti 🚨', '“' || l.title || '” ilanı hijyen şikayeti nedeniyle otomatik olarak yayından kaldırıldı. Lütfen 24 saat içinde inceleyin.');
+      return;
+    end if;
+  end if;
   perform _notify_admins('Yeni şikayet 🚩', case when p_target_type = 'listing' then 'Bir ilan şikayet edildi.' else 'Bir kullanıcı şikayet edildi.' end);
+end $$;
+
+-- Admin: incelemedeki ilanı temize çıkarıp yeniden yayına alır, ilgili açık şikayetleri kapatır.
+create or replace function public.admin_reinstate_listing(p_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  l listings;
+  owner profiles;
+begin
+  perform _require_admin();
+  select * into l from listings where id = p_id for update;
+  if l.id is null then perform _fail('İlan bulunamadı.'); end if;
+  select * into owner from profiles where id = l.owner_id;
+  update listings set under_review = false, removed_by_admin = false,
+    status = case when owner.active and owner.seller_status = 'approved' then 'active' else status end,
+    updated_at = now()
+  where id = p_id;
+  update reports set status = 'resolved' where target_id = p_id and status = 'open';
+  perform _notify(l.owner_id, 'İlanın yeniden yayında ✅', '“' || l.title || '” ilanı incelendi ve yeniden yayına alındı.');
 end $$;
 
 create or replace function public.block_user(p_user_id uuid) returns void
@@ -996,11 +1078,11 @@ grant execute on function public.is_admin(), public.buyer_fee_rate(), public.sel
 grant execute on function
   public.update_profile(text, text, text, text, text, text, text, text, text),
   public.delete_my_account(),
-  public.submit_seller_application(text, text, text, text, text, boolean, boolean),
+  public.submit_seller_application(text, text, text, text, text, text, boolean, boolean),
   public.submit_courier_application(text, text, text, text, text, text, text[], boolean, boolean),
   public.update_courier_profile(boolean, text[], text),
   public.review_verification(uuid, boolean, text),
-  public.save_listing(uuid, text, text, numeric, text, text[], text, text[], text, text),
+  public.save_listing(uuid, text, text, numeric, text, text[], text, text[], text, text[], boolean, text, boolean, boolean, text),
   public.set_listing_status(uuid, text),
   public.delete_listing(uuid),
   public.create_order(uuid, int, timestamptz, text, text, text, text),
@@ -1013,6 +1095,7 @@ grant execute on function
   public.block_user(uuid),
   public.unblock_user(uuid),
   public.resolve_report(uuid),
+  public.admin_reinstate_listing(uuid),
   public.admin_set_user_active(uuid, boolean),
   public.admin_set_user_role(uuid, text),
   public.admin_delete_user(uuid),

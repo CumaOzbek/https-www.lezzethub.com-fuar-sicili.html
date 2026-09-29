@@ -5,7 +5,7 @@ import { Text, View } from 'react-native';
 import { AdminHeader } from '../../components/AdminHeader';
 import { ListingImage } from '../../components/domain';
 import { useFeedback } from '../../components/feedback';
-import { Avatar, Badge, Button, Card, EmptyState, Row, Screen, Segmented } from '../../components/ui';
+import { Avatar, Badge, Button, Card, EmptyState, Notice, Row, Screen, Segmented } from '../../components/ui';
 import { timeAgo } from '../../lib/format';
 import { useStore } from '../../lib/store';
 import { colors, font } from '../../lib/theme';
@@ -56,7 +56,7 @@ export default function AdminReports() {
                       {listing.title}
                     </Text>
                     <Text style={font.small}>
-                      {userName(listing.ownerId)} · {listing.status === 'active' ? 'Yayında' : 'Pasif'}
+                      {userName(listing.ownerId)} · {listing.underReview ? 'Otomatik incelemede (gizli)' : listing.status === 'active' ? 'Yayında' : 'Pasif'}
                     </Text>
                   </View>
                 </Row>
@@ -76,7 +76,43 @@ export default function AdminReports() {
               </Card>
             )}
 
-            {r.status === 'open' && (
+            {r.status === 'open' && listing?.underReview && (
+              <View style={{ gap: 8, marginTop: 12 }}>
+                <Notice
+                  tone="red"
+                  icon="alert-circle-outline"
+                  title="İlan otomatik olarak yayından kaldırıldı"
+                  text="Hijyen şikayeti eşiği aşıldı. Satıcıyla iletişime geç; gerekiyorsa alıcıyı sağlık kuruluşuna ve ALO 174 Gıda Hattı’na yönlendir. Sonuca göre ilanı yeniden aç veya kalıcı olarak kaldır."
+                />
+                <Row gap={8}>
+                  <Button
+                    title="Kalıcı kaldır"
+                    icon="trash-outline"
+                    variant="danger"
+                    small
+                    style={{ flex: 1 }}
+                    onPress={() =>
+                      run(async () => {
+                        await actions.setListingStatus(listing.id, 'passive');
+                        for (const x of db.reports.filter((y) => y.targetId === listing.id && y.status === 'open')) await actions.adminResolveReport(x.id);
+                      }, 'İlan kalıcı olarak kaldırıldı')
+                    }
+                  />
+                  <Button
+                    title="Temiz, yayına al"
+                    icon="checkmark-circle-outline"
+                    variant="success"
+                    small
+                    style={{ flex: 1 }}
+                    onPress={async () => {
+                      const { ok } = await confirm({ title: 'İlanı yeniden yayına al', message: 'İnceleme tamamlandı ve sorun bulunmadıysa onayla. İlgili açık şikayetler kapatılır.', confirmText: 'Yayına Al' });
+                      if (ok) await run(() => actions.adminReinstateListing(listing.id), 'İlan yeniden yayında');
+                    }}
+                  />
+                </Row>
+              </View>
+            )}
+            {r.status === 'open' && !listing?.underReview && (
               <View style={{ gap: 8, marginTop: 12 }}>
                 <Row gap={8}>
                   {listing && listing.status === 'active' && (

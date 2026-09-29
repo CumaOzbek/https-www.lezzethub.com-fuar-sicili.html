@@ -26,6 +26,8 @@ export interface User {
   sellerStatus: VerificationStatus;
   /** Kurye olarak görünmek için ehliyet admin tarafından onaylanmış olmalı. */
   courierStatus: VerificationStatus;
+  /** Tarım ve Orman Bakanlığı gıda işletmesi kayıt numarası (satıcı onaylanınca herkese açık gösterilir). */
+  foodRegistrationNo?: string;
   /** Kullanım koşulları ve KVKK aydınlatma metni kabulü. */
   acceptedTermsAt?: string;
   /** KVKK açık rıza onayı. */
@@ -51,6 +53,37 @@ export const CATEGORIES = [
 
 export type CategoryKey = (typeof CATEGORIES)[number]['key'];
 
+/** Türk Gıda Kodeksi Etiketleme Yönetmeliği'ndeki 14 alerjen grubu. */
+export const ALLERGENS = [
+  { key: 'gluten', label: 'Gluten (buğday, arpa, çavdar, yulaf)' },
+  { key: 'sut', label: 'Süt ve süt ürünleri (laktoz dahil)' },
+  { key: 'yumurta', label: 'Yumurta' },
+  { key: 'kuruyemis', label: 'Sert kabuklu yemişler (fındık, ceviz, antep fıstığı, badem vb.)' },
+  { key: 'yerfistigi', label: 'Yer fıstığı' },
+  { key: 'susam', label: 'Susam (tahin dahil)' },
+  { key: 'soya', label: 'Soya' },
+  { key: 'balik', label: 'Balık' },
+  { key: 'kabuklu', label: 'Kabuklu deniz ürünleri (karides, yengeç vb.)' },
+  { key: 'yumusakca', label: 'Yumuşakçalar (midye, kalamar vb.)' },
+  { key: 'kereviz', label: 'Kereviz' },
+  { key: 'hardal', label: 'Hardal' },
+  { key: 'acibakla', label: 'Acı bakla (lupin)' },
+  { key: 'sulfit', label: 'Kükürt dioksit ve sülfitler' },
+] as const;
+
+export type AllergenKey = (typeof ALLERGENS)[number]['key'];
+
+/** Platformda satışı yasak olan yüksek riskli ürünler (satıcı her ilanda içermediğini onaylar). */
+export const PROHIBITED_FOODS = [
+  'Çiğ veya az pişmiş et, tavuk, balık ve deniz ürünleri (çiğ köfte dahil)',
+  'Pastörize edilmemiş (çiğ) süt ve çiğ sütten yapılan ürünler',
+  'Çiğ yumurta içeren ürünler (ev yapımı mayonez, tiramisu, çiğ yumurtalı soslar)',
+  'Ev tipi konserve ve yağda saklanan sebzeler (botulizm riski)',
+  'Yabani / toplanmış mantar ve otlar',
+  'Alkollü içecekler',
+  'Bebek maması, takviye edici gıda, “şifalı” veya ilaç iddialı ürünler',
+] as const;
+
 export interface Listing {
   id: string;
   ownerId: string;
@@ -64,9 +97,19 @@ export interface Listing {
   delivery: DeliveryMethod[];
   /** Kurye veya kargo ile teslimde ücreti kim öder / kim ayarlar. */
   shippingPayer: ShippingPayer;
+  /** Beyan edilen alerjenler; boş dizi = satıcı alerjen içermediğini beyan etti. */
+  allergens: AllergenKey[];
+  /** Son tüketim ve saklama bilgisi (ör. “Buzdolabında 2 gün”). */
+  shelfLife: string;
+  /** Oda sıcaklığında dayanıklı, soğuk zincir gerektirmez (kargo yalnızca bu ürünlerde). */
+  shelfStable: boolean;
+  /** Satıcının yasaklı ürün içermediğini son onayladığı an. */
+  safetyConfirmedAt: string;
   status: ListingStatus;
   /** Admin tarafından yayından kaldırıldıysa satıcı tekrar yayına alamaz. */
   removedByAdmin?: boolean;
+  /** Hijyen şikayeti nedeniyle otomatik yayından kaldırıldı; yalnızca admin geri açabilir. */
+  underReview?: boolean;
   province: string;
   district: string;
   neighborhood: string;
@@ -195,6 +238,8 @@ export interface Verification {
   /** Satıcı: e-Devlet belge barkod numarası. Kurye: ehliyet belge numarası. */
   docNumber: string;
   licenseClass?: LicenseClass;
+  /** Satıcı: gıda işletmesi kayıt numarası. */
+  foodRegistrationNo?: string;
   iban?: string;
   ibanHolder?: string;
   /** Satıcının mevzuat ve sorumluluk beyanını onayladığı an. */

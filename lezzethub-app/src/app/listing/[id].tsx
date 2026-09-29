@@ -10,7 +10,7 @@ import { PhotoCarousel } from '../../components/photos';
 import { ReportSheet } from '../../components/ReportSheet';
 import { Avatar, Badge, Button, Card, EmptyState, Header, InfoRow, LocationBadge, Notice, Row, StickyFooter } from '../../components/ui';
 import { calcBreakdown } from '../../lib/commission';
-import { DELIVERY_LABEL, SHIPPING_PAYER_LABEL, shippingPayerText, tl } from '../../lib/format';
+import { DELIVERY_LABEL, SHIPPING_PAYER_LABEL, allergenShort, shippingPayerText, tl } from '../../lib/format';
 import { canSharePhoto, shareListing, shareListingPhoto } from '../../lib/share';
 import { useBlockedIds, useStore } from '../../lib/store';
 import { colors, font, radius, shadowSoft } from '../../lib/theme';
@@ -86,7 +86,9 @@ export default function ListingDetail() {
           <View style={styles.sheet}>
             <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Badge label={`${cat.emoji} ${cat.label}`} tone="teal" />
-              {listing.status !== 'active' && <Badge label={listing.removedByAdmin ? 'Yayından kaldırıldı' : 'Pasif'} tone="gray" icon="eye-off-outline" />}
+              {listing.status !== 'active' && (
+                <Badge label={listing.underReview ? 'Hijyen incelemesinde' : listing.removedByAdmin ? 'Yayından kaldırıldı' : 'Pasif'} tone={listing.underReview ? 'red' : 'gray'} icon="eye-off-outline" />
+              )}
             </Row>
             <Text style={[font.h1, { marginTop: 10 }]}>{listing.title}</Text>
             <Row style={{ marginTop: 8, justifyContent: 'space-between' }}>
@@ -95,7 +97,36 @@ export default function ListingDetail() {
             </Row>
             <Text style={[font.body, { marginTop: 14 }]}>{listing.description}</Text>
 
+            {isOwner && listing.underReview && (
+              <View style={{ marginTop: 14 }}>
+                <Notice
+                  tone="red"
+                  icon="alert-circle-outline"
+                  title="İlanın hijyen incelemesinde"
+                  text="Bu ilan hakkında hijyen / gıda güvenliği şikayeti geldiği için otomatik olarak yayından kaldırıldı. Yönetici incelemesi bitene kadar sipariş alınamaz."
+                />
+              </View>
+            )}
+
             <Card style={{ marginTop: 18, padding: 12 }}>
+              <View style={{ flexDirection: 'row', gap: 12, paddingVertical: 8 }}>
+                <Ionicons name="warning-outline" size={18} color={colors.warning} style={{ marginTop: 1 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={font.tiny}>Alerjenler</Text>
+                  {listing.allergens.length === 0 ? (
+                    <Text style={{ color: colors.success, fontSize: 15, marginTop: 1, fontWeight: '700' }}>Satıcı beyanı: alerjen içermez</Text>
+                  ) : (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                      {listing.allergens.map((a) => (
+                        <Badge key={a} label={allergenShort(a)} tone="honey" />
+                      ))}
+                    </View>
+                  )}
+                </View>
+              </View>
+              <View style={styles.infoDivider} />
+              <InfoRow icon="thermometer-outline" label={`Son tüketim ve saklama${listing.shelfStable ? ' · oda sıcaklığında dayanıklı' : ' · soğuk saklayın'}`} value={listing.shelfLife} />
+              <View style={styles.infoDivider} />
               <InfoRow icon="time-outline" label="Müsaitlik / hazırlanma süresi" value={listing.prepTime} />
               <View style={styles.infoDivider} />
               <View style={{ flexDirection: 'row', gap: 12, paddingVertical: 8, alignItems: 'center' }}>
@@ -118,7 +149,11 @@ export default function ListingDetail() {
                 </>
               )}
               <View style={styles.infoDivider} />
-              <InfoRow icon="shield-checkmark-outline" label="Satıcı doğrulaması" value="E-Devlet onaylı hijyen belgesi LezzetHub tarafından kontrol edildi" />
+              <InfoRow
+                icon="shield-checkmark-outline"
+                label="Satıcı doğrulaması"
+                value={`E-Devlet onaylı hijyen belgesi kontrol edildi${seller.foodRegistrationNo ? ` · Gıda işletmesi kayıt no: ${seller.foodRegistrationNo}` : ''}`}
+              />
             </Card>
 
             {isOwner && (

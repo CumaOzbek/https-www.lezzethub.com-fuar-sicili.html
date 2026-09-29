@@ -1,4 +1,4 @@
-import type { DeliveryMethod, LicenseClass, OrderStatus, ShippingPayer, VerificationStatus } from './types';
+import { ALLERGENS, type AllergenKey, type DeliveryMethod, type LicenseClass, type OrderStatus, type ShippingPayer, type VerificationStatus } from './types';
 
 export function tl(n: number) {
   return (
@@ -99,3 +99,6 @@ export function initials(name: string) {
     .map((p) => p[0]!.toLocaleUpperCase('tr-TR'))
     .join('');
 }
+
+/** Alerjenin kısa adı (parantez içindeki örnekler olmadan). */
+export const allergenShort = (key: AllergenKey) => (ALLERGENS.find((a) => a.key === key)?.label ?? key).split(' (')[0]!;

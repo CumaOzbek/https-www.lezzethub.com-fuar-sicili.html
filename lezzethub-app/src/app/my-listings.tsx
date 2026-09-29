@@ -63,7 +63,8 @@ export default function MyListings() {
                     <DeliveryIcons delivery={l.delivery} />
                     <Badge label={`${orders} sipariş`} tone="gray" />
                     <Badge label={l.images.length ? `${l.images.length} fotoğraf` : 'Fotoğraf yok'} tone={l.images.length ? 'teal' : 'honey'} icon="camera-outline" />
-                    {l.removedByAdmin && <Badge label="Admin kaldırdı" tone="red" />}
+                    {l.underReview && <Badge label="Hijyen incelemesinde" tone="red" icon="alert-circle-outline" />}
+                    {l.removedByAdmin && !l.underReview && <Badge label="Admin kaldırdı" tone="red" />}
                   </Row>
                 </View>
               </Row>
@@ -75,7 +76,7 @@ export default function MyListings() {
                   variant="outline"
                   small
                   style={{ flex: 1 }}
-                  disabled={l.removedByAdmin && l.status !== 'active'}
+                  disabled={(l.removedByAdmin || l.underReview) && l.status !== 'active'}
                   onPress={() =>
                     run(
                       () => actions.setListingStatus(l.id, l.status === 'active' ? 'passive' : 'active'),

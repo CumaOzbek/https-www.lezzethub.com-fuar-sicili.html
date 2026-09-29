@@ -87,6 +87,7 @@ export default function AdminVerifications() {
                   {v.kind === 'seller' ? (
                     <>
                       <InfoRow icon="barcode-outline" label="e-Devlet doğrulama (barkod) no" value={v.docNumber} />
+                      <InfoRow icon="business-outline" label="Gıda işletmesi kayıt no" value={v.foodRegistrationNo} />
                       <InfoRow icon="card-outline" label="IBAN" value={v.iban ? `${formatIban(v.iban)} · ${v.ibanHolder}` : undefined} />
                     </>
                   ) : (
@@ -107,7 +108,7 @@ export default function AdminVerifications() {
                   <>
                     {v.kind === 'seller' && (
                       <View style={{ marginTop: 6 }}>
-                        <Notice tone="teal" icon="shield-checkmark-outline" text="Barkod numarasını e-Devlet Belge Doğrulama hizmetinde sorgulayıp belgedeki ad soyadın kullanıcıyla eşleştiğini kontrol et." />
+                        <Notice tone="teal" icon="shield-checkmark-outline" text="Barkod numarasını e-Devlet Belge Doğrulama hizmetinde sorgula, belgedeki ad soyadın kullanıcıyla eşleştiğini ve gıda işletmesi kayıt numarasının İl/İlçe Tarım ve Orman Müdürlüğü kaydıyla uyumlu olduğunu kontrol et." />
                         <Button title="e-Devlet Belge Doğrulama’yı aç" icon="open-outline" variant="ghost" small onPress={() => WebBrowser.openBrowserAsync(E_DEVLET_VERIFY_URL)} style={{ alignSelf: 'flex-start', marginTop: 6 }} />
                       </View>
                     )}

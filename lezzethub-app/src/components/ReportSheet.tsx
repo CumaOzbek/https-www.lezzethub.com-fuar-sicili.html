@@ -7,7 +7,7 @@ import { useStore } from '../lib/store';
 import { colors, font, noOutline, radius } from '../lib/theme';
 import { REPORT_REASONS, type ReportReason } from '../lib/types';
 import { useFeedback } from './feedback';
-import { Button, Row } from './ui';
+import { Button, Notice, Row } from './ui';
 
 /** İlan veya kullanıcı şikayeti; isteğe bağlı olarak kullanıcıyı engelleme. */
 export function ReportSheet({
@@ -68,6 +68,15 @@ export function ReportSheet({
             <Text style={{ color: colors.ink, fontSize: 15, flex: 1 }}>{r.label}</Text>
           </Pressable>
         ))}
+        {reason === 'hygiene' && (
+          <View style={{ marginBottom: 8 }}>
+            <Notice
+              tone="red"
+              icon="medkit-outline"
+              text="Sağlık sorunu yaşadıysan önce bir sağlık kuruluşuna başvur. Gıda şikayetlerini ALO 174 Gıda Hattı’na da bildirebilirsin. Ürünü satın aldıysan şikayetin ilanı inceleme bitene kadar hemen yayından kaldırır."
+            />
+          </View>
+        )}
         <TextInput
           value={note}
           onChangeText={setNote}

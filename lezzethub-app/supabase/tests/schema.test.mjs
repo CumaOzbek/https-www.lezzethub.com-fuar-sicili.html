@@ -77,15 +77,17 @@ await rpcFails(`select * from courier_profiles`, [], 'permission denied', 'anon 
 // Satıcı başvurusu: belge + beyan + açık rıza zorunlu
 const IBAN = 'TR330006100519786457841326';
 await as(ayse);
-await rpcFails(`select save_listing(null,'Künefe','Tuzsuz peynirli künefe',180,'tatli','{}','','{pickup}','buyer','active')`, [], 'hijyen belgesi', 'unapproved seller cannot list');
+await rpcFails(`select save_listing(null,'Künefe','Tuzsuz peynirli künefe',180,'tatli','{}','','{pickup}','buyer','{sut}',false,'Buzdolabında 2 gün',true,true,'active')`, [], 'hijyen belgesi', 'unapproved seller cannot list');
 const ayseDoc = `${ayse}/hijyen.jpg`;
-await rpcFails(`select submit_seller_application('', 'image', '12345678AB', $1, 'Ayşe Demir', true, true)`, [IBAN], 'hijyen belgeni', 'doc required');
-await rpcFails(`select submit_seller_application($1, 'image', '12345678AB', $2, 'Ayşe Demir', true, true)`, [`${mehmet}/x.jpg`, IBAN], 'hijyen belgeni', 'doc must be in own folder');
-await rpcFails(`select submit_seller_application($1, 'image', '123', $2, 'Ayşe Demir', true, true)`, [ayseDoc, IBAN], 'barkod', 'barcode required');
-await rpcFails(`select submit_seller_application($1, 'image', '12345678AB', 'TR000000000000000000000000', 'Ayşe Demir', true, true)`, [ayseDoc], 'IBAN', 'iban checksum');
-await rpcFails(`select submit_seller_application($1, 'image', '12345678AB', $2, 'Ayşe Demir', false, true)`, [ayseDoc, IBAN], 'mevzuat', 'declaration required');
-await rpcFails(`select submit_seller_application($1, 'image', '12345678AB', $2, 'Ayşe Demir', true, false)`, [ayseDoc, IBAN], 'açık rıza', 'document consent required');
-await q(`select submit_seller_application($1, 'image', '12345678AB', $2, 'Ayşe Demir', true, true)`, [ayseDoc, IBAN]);
+await rpcFails(`select submit_seller_application('', 'image', '12345678AB', 'TR-31-K-012345', $1, 'Ayşe Demir', true, true)`, [IBAN], 'hijyen belgeni', 'doc required');
+await rpcFails(`select submit_seller_application($1, 'image', '12345678AB', 'TR-31-K-012345', $2, 'Ayşe Demir', true, true)`, [`${mehmet}/x.jpg`, IBAN], 'hijyen belgeni', 'doc must be in own folder');
+await rpcFails(`select submit_seller_application($1, 'image', '123', 'TR-31-K-012345', $2, 'Ayşe Demir', true, true)`, [ayseDoc, IBAN], 'barkod', 'barcode required');
+await rpcFails(`select submit_seller_application($1, 'image', '12345678AB', '', $2, 'Ayşe Demir', true, true)`, [ayseDoc, IBAN], 'Gıda işletmesi', 'food registration no required');
+await rpcFails(`select submit_seller_application($1, 'image', '12345678AB', 'ABCDE', $2, 'Ayşe Demir', true, true)`, [ayseDoc, IBAN], 'Gıda işletmesi', 'food registration no must contain digits');
+await rpcFails(`select submit_seller_application($1, 'image', '12345678AB', 'TR-31-K-012345', 'TR000000000000000000000000', 'Ayşe Demir', true, true)`, [ayseDoc], 'IBAN', 'iban checksum');
+await rpcFails(`select submit_seller_application($1, 'image', '12345678AB', 'TR-31-K-012345', $2, 'Ayşe Demir', false, true)`, [ayseDoc, IBAN], 'mevzuat', 'declaration required');
+await rpcFails(`select submit_seller_application($1, 'image', '12345678AB', 'TR-31-K-012345', $2, 'Ayşe Demir', true, false)`, [ayseDoc, IBAN], 'açık rıza', 'document consent required');
+await q(`select submit_seller_application($1, 'image', '12345678AB', 'TR-31-K-012345', $2, 'Ayşe Demir', true, true)`, [ayseDoc, IBAN]);
 r = await q(`select v.*, p.seller_status from verifications v join profiles p on p.id = v.user_id where v.user_id = $1`, [ayse]);
 ok(r.length === 1 && r[0].status === 'pending' && r[0].seller_status === 'pending' && r[0].declaration_at && r[0].iban === IBAN, 'seller application pending');
 await rpcFails(`select review_verification($1, true, '')`, [r[0].id], 'yönetici', 'user cannot self-review');
@@ -99,11 +101,12 @@ ok(r.some((x) => x.title.startsWith('Yeni satıcı')), 'admin notified of applic
 await rpcFails(`select review_verification($1, false, '')`, [ayseVer.id], 'gerekçe', 'reject requires note');
 await q(`select review_verification($1, true, '')`, [ayseVer.id]);
 await rpcFails(`select review_verification($1, true, '')`, [ayseVer.id], 'sonuçlandırıldı', 'review only once');
-ok((await q(`select seller_status from profiles where id = $1`, [ayse]))[0].seller_status === 'approved', 'seller approved');
+r = await q(`select seller_status, food_registration_no from profiles where id = $1`, [ayse]);
+ok(r[0].seller_status === 'approved' && r[0].food_registration_no === 'TR-31-K-012345', 'seller approved, food registration no public');
 
 // Serkan reddedilip yeniden başvurur
 await as(serkan);
-await q(`select submit_seller_application($1, 'pdf', 'ABCDEFGH12', $2, 'Serkan Usta', true, true)`, [`${serkan}/b.pdf`, IBAN]);
+await q(`select submit_seller_application($1, 'pdf', 'ABCDEFGH12', 'TR-31-K-012345', $2, 'Serkan Usta', true, true)`, [`${serkan}/b.pdf`, IBAN]);
 await as(admin);
 const sv = (await q(`select id from verifications where user_id = $1`, [serkan]))[0];
 await q(`select review_verification($1, false, 'Belge okunmuyor')`, [sv.id]);
@@ -111,7 +114,7 @@ await as(serkan);
 ok((await q(`select seller_status from profiles where id = $1`, [serkan]))[0].seller_status === 'rejected', 'seller rejected');
 r = await q(`select body from notifications where user_id = $1 order by created_at desc limit 1`, [serkan]);
 ok(r[0].body.includes('Belge okunmuyor'), 'rejection reason notified');
-await q(`select submit_seller_application($1, 'image', 'ABCDEFGH12', $2, 'Serkan Usta', true, true)`, [`${serkan}/c.jpg`, IBAN]);
+await q(`select submit_seller_application($1, 'image', 'ABCDEFGH12', 'TR-31-K-012345', $2, 'Serkan Usta', true, true)`, [`${serkan}/c.jpg`, IBAN]);
 ok((await q(`select count(*)::int n from verifications where user_id = $1`, [serkan]))[0].n === 1, 'reapplication replaces old one');
 
 // Kurye başvurusu: A2/B ehliyet zorunlu
@@ -140,17 +143,24 @@ await rpcFails(`select update_courier_profile(null, array['Çankaya'], null)`, [
 
 // İlan
 await as(ayse);
-await rpcFails(`select save_listing(null,'ab','uzun açıklama',100,'tatli','{}','','{pickup}','buyer','active')`, [], 'Başlık', 'title validation');
-await rpcFails(`select save_listing(null,'Künefe','uzun açıklama metni',100,'tatli','{}','','{}','buyer','active')`, [], 'teslimat', 'delivery validation');
-await rpcFails(`select save_listing(null,'Künefe','uzun açıklama metni',100,'tatli','{}','','{pickup}','x','active')`, [], 'kime ait', 'shipping payer validation');
-await rpcFails(`select save_listing(null,'Künefe','uzun açıklama metni',100,'tatli',array['1','2','3','4','5','6','7'],'','{pickup}','buyer','active')`, [], '6 fotoğraf', 'photo limit');
-r = await q(`select * from save_listing(null,'Künefe','Tuzsuz peynirli künefe',180,'tatli',array['https://x/1.jpg','https://x/2.jpg'],'1 saat','{pickup,courier,cargo}','seller','active')`);
+await rpcFails(`select save_listing(null,'ab','uzun açıklama',100,'tatli','{}','','{pickup}','buyer','{sut}',false,'Buzdolabında 2 gün',true,true,'active')`, [], 'Başlık', 'title validation');
+await rpcFails(`select save_listing(null,'Künefe','uzun açıklama metni',100,'tatli','{}','','{}','buyer','{sut}',false,'Buzdolabında 2 gün',true,true,'active')`, [], 'teslimat', 'delivery validation');
+await rpcFails(`select save_listing(null,'Künefe','uzun açıklama metni',100,'tatli','{}','','{pickup}','x','{sut}',false,'Buzdolabında 2 gün',true,true,'active')`, [], 'kime ait', 'shipping payer validation');
+await rpcFails(`select save_listing(null,'Künefe','uzun açıklama metni',100,'tatli',array['1','2','3','4','5','6','7'],'','{pickup}','buyer','{sut}',false,'Buzdolabında 2 gün',true,true,'active')`, [], '6 fotoğraf', 'photo limit');
+await rpcFails(`select save_listing(null,'Künefe','uzun açıklama metni',100,'tatli','{}','','{pickup}','buyer','{}',false,'Buzdolabında 2 gün',true,true,'active')`, [], 'Alerjen', 'allergen declaration required');
+await rpcFails(`select save_listing(null,'Künefe','uzun açıklama metni',100,'tatli','{}','','{pickup}','buyer','{sut}',true,'Buzdolabında 2 gün',true,true,'active')`, [], 'beyanını kaldır', 'allergens + no-allergen conflict');
+await rpcFails(`select save_listing(null,'Künefe','uzun açıklama metni',100,'tatli','{}','','{pickup}','buyer','{sut}',false,'',true,true,'active')`, [], 'Son tüketim', 'shelf life required');
+await rpcFails(`select save_listing(null,'Künefe','uzun açıklama metni',100,'tatli','{}','','{cargo}','buyer','{sut}',false,'1 gün',false,true,'active')`, [], 'Kargo yalnızca', 'cargo requires shelf stable');
+await rpcFails(`select save_listing(null,'Künefe','uzun açıklama metni',100,'tatli','{}','','{pickup}','buyer','{sut}',false,'1 gün',false,false,'active')`, [], 'yasaklı', 'safety confirmation required');
+await rpcFails(`select save_listing(null,'Künefe','uzun açıklama metni',100,'tatli','{}','','{pickup}','buyer','{zehir}',false,'1 gün',false,true,'active')`, [], null, 'unknown allergen rejected');
+r = await q(`select * from save_listing(null,'Künefe','Tuzsuz peynirli künefe',180,'tatli',array['https://x/1.jpg','https://x/2.jpg'],'1 saat','{pickup,courier,cargo}','seller','{sut}',false,'Buzdolabında 2 gün',true,true,'active')`);
 const kunefe = r[0];
 ok(kunefe.province === 'Hatay' && kunefe.district === 'Antakya' && kunefe.shipping_payer === 'seller' && kunefe.images.length === 2, 'listing inherits location, keeps shipping payer');
-r = await q(`select * from save_listing(null,'Tepsi Kebabı','Taş fırın tepsi kebabı',320,'ana-yemek','{}','','{pickup}','buyer','passive')`);
+ok(kunefe.allergens.join() === 'sut' && kunefe.shelf_life === 'Buzdolabında 2 gün' && kunefe.shelf_stable && kunefe.safety_confirmed_at, 'food safety fields saved');
+r = await q(`select * from save_listing(null,'Tepsi Kebabı','Taş fırın tepsi kebabı',320,'ana-yemek','{}','','{pickup}','buyer','{sut}',false,'Buzdolabında 2 gün',true,true,'passive')`);
 const kebap = r[0];
 await as(mehmet);
-await rpcFails(`select save_listing($1,'Künefe','Tuzsuz peynirli künefe',1,'tatli','{}','','{pickup}','buyer','active')`, [kunefe.id], 'hijyen', 'non-seller cannot edit');
+await rpcFails(`select save_listing($1,'Künefe','Tuzsuz peynirli künefe',1,'tatli','{}','','{pickup}','buyer','{sut}',false,'Buzdolabında 2 gün',true,true,'active')`, [kunefe.id], 'hijyen', 'non-seller cannot edit');
 r = await q(`select id from listings`);
 ok(r.length === 1 && r[0].id === kunefe.id, 'passive listing hidden from others');
 await as(null);
@@ -322,8 +332,8 @@ await q(`select mark_notifications_read()`);
 ok((await q(`select count(*)::int n from notifications where not read`))[0].n === 0, 'all notifications read');
 
 // Şikayet ve engelleme
-await q(`select report_content('listing', $1, 'hygiene', 'Soğuk geldi')`, [kunefe.id]);
-await rpcFails(`select report_content('listing', $1, 'hygiene', '')`, [kunefe.id], 'açık bir şikayetin', 'duplicate report');
+await q(`select report_content('listing', $1, 'misleading', 'Fotoğraftaki gibi değil')`, [kunefe.id]);
+await rpcFails(`select report_content('listing', $1, 'misleading', '')`, [kunefe.id], 'açık bir şikayetin', 'duplicate report');
 await rpcFails(`select report_content('user', $1, 'abuse', '')`, [mehmet], 'Kendini', 'self report');
 await as(admin);
 const rep = (await q(`select * from reports`))[0];
@@ -336,6 +346,39 @@ await rpcFails(`select create_order($1, 1, $2, 'pickup', '', '', 'x')`, [kunefe.
 await q(`select unblock_user($1)`, [ayse]);
 await q(`select send_message($1, 'tekrar merhaba')`, [o.id]);
 ok(true, 'unblock allows messaging');
+
+// Hijyen şikayeti: ürünü satın almış alıcıdan tek şikayet → ilan otomatik incelemeye alınır.
+await as(mehmet);
+await q(`select report_content('listing', $1, 'hygiene', 'Midem bozuldu')`, [kunefe.id]);
+await su();
+r = await q(`select status, under_review from listings where id = $1`, [kunefe.id]);
+ok(r[0].status === 'passive' && r[0].under_review === true, 'verified buyer hygiene report hides listing');
+ok((await q(`select count(*)::int n from notifications where user_id = $1 and title like 'İlanın incelemeye alındı%'`, [ayse]))[0].n === 1, 'seller notified of hygiene hold');
+ok((await q(`select count(*)::int n from notifications where user_id = $1 and title like 'ACİL%'`, [admin]))[0].n === 1, 'admins alerted of hygiene hold');
+await as(null);
+ok((await q(`select id from listings where id = $1`, [kunefe.id])).length === 0, 'held listing hidden from public');
+await as(ayse);
+await rpcFails(`select set_listing_status($1, 'active')`, [kunefe.id], 'incelemede', 'owner cannot reactivate held listing');
+await rpcFails(`select save_listing($1,'Künefe','Tuzsuz peynirli künefe',180,'tatli','{}','','{pickup}','seller','{sut}',false,'1 gün',false,true,'active')`, [kunefe.id], 'incelemede', 'owner cannot republish held listing via edit');
+await rpcFails(`select admin_reinstate_listing($1)`, [kunefe.id], 'yönetici', 'only admin reinstates');
+await as(admin);
+await q(`select admin_reinstate_listing($1)`, [kunefe.id]);
+await su();
+r = await q(`select status, under_review from listings where id = $1`, [kunefe.id]);
+ok(r[0].status === 'active' && r[0].under_review === false, 'admin reinstates listing');
+ok((await q(`select count(*)::int n from reports where target_id = $1 and status = 'open'`, [kunefe.id]))[0].n === 0, 'reinstate resolves open reports');
+// Satın almamış kişilerden: 1 şikayet yetmez, 2 farklı kişi → otomatik inceleme
+await as(ayse);
+const humus = (await q(`select * from save_listing(null,'Humus','Tahinli ev humusu, limonlu',120,'meze','{}','','{pickup}','buyer','{susam}',false,'Buzdolabında 2 gün',false,true,'active')`))[0];
+await as(fatma);
+await q(`select report_content('listing', $1, 'hygiene', 'Kötü koku')`, [humus.id]);
+await su();
+ok((await q(`select status from listings where id = $1`, [humus.id]))[0].status === 'active', 'single unverified hygiene report does not hide');
+await as(serkan);
+await q(`select report_content('listing', $1, 'hygiene', 'Bozuk')`, [humus.id]);
+await su();
+r = await q(`select status, under_review from listings where id = $1`, [humus.id]);
+ok(r[0].status === 'passive' && r[0].under_review === true, 'two distinct hygiene reports hide listing');
 
 // Admin işlemleri
 await as(mehmet);

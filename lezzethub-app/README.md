@@ -5,7 +5,8 @@ Türkiye’nin 81 ilinde ev yemeği satıcılarıyla alıcıları **il + ilçe +
 - randevulu sipariş ve **online ödeme** (iyzico)
 - teslimat için **elden, kurye veya kargo**; kurye/kargo ücretini alıcı ya da satıcı üstlenir
 - **onaylı kurye rehberi**
-- satıcılar için **zorunlu hijyen belgesi** ve mevzuat beyanı
+- satıcılar için **zorunlu hijyen belgesi, gıda işletmesi kayıt numarası** ve mevzuat beyanı
+- gıda güvenliği kuralları: zorunlu alerjen ve son tüketim bilgisi, yasaklı ürünler, kargoda yalnızca dayanıklı ürün, hijyen şikayetinde otomatik yayından kaldırma
 
 Expo (React Native) + Expo Router + TypeScript ile yazıldı; iOS, Android ve web’de çalışır. Veriler **Supabase** (PostgreSQL + Auth + Storage + Realtime + Edge Functions) üzerinde tutulur. Supabase ayarlanmadığında uygulama, cihaz içi **demo modunda** çalışır.
 
@@ -13,9 +14,9 @@ Expo (React Native) + Expo Router + TypeScript ile yazıldı; iOS, Android ve we
 |---|---|---|---|
 | ![](docs/screenshots/ana-sayfa.png) | ![](docs/screenshots/kayit-onaylar.png) | ![](docs/screenshots/satici-basvurusu.png) | ![](docs/screenshots/kurye-basvurusu.png) |
 
-| Kurye Bul | Online ödeme (demo) | Sipariş detayı | Admin: başvurular | Admin: satıcı ödemeleri |
-|---|---|---|---|---|
-| ![](docs/screenshots/kurye-bul.png) | ![](docs/screenshots/online-odeme.png) | ![](docs/screenshots/siparis-detay.png) | ![](docs/screenshots/admin-basvurular.png) | ![](docs/screenshots/admin-odemeler.png) |
+| Kurye Bul | Online ödeme (demo) | Sipariş detayı | Admin: başvurular | Admin: satıcı ödemeleri | Admin: hijyen incelemesi |
+|---|---|---|---|---|---|
+| ![](docs/screenshots/kurye-bul.png) | ![](docs/screenshots/online-odeme.png) | ![](docs/screenshots/siparis-detay.png) | ![](docs/screenshots/admin-basvurular.png) | ![](docs/screenshots/admin-odemeler.png) | ![](docs/screenshots/admin-hijyen-inceleme.png) |
 
 ---
 
@@ -53,7 +54,7 @@ Canlı modda tüm kullanıcılar aynı veritabanını kullanır: Ayşe’nin ila
 1. **Proje aç:** https://supabase.com → ücretsiz hesap → *New project* (bölge olarak Frankfurt önerilir).
 2. **Veritabanını kur:** Supabase panelinde *SQL Editor → New query*. Sırasıyla şu dosyaların içeriğini yapıştırıp **Run** de:
    1. `supabase/locations.sql`: 81 il ve 973 ilçe (konum doğrulaması için)
-   2. `supabase/schema.sql`: tablolar, güvenlik kuralları, sipariş/ödeme akışı, satıcı/kurye başvuruları
+   2. `supabase/schema.sql` (önceki sürümü kurduysan yeniden çalıştırman yeterli; eksik sütunları kendisi ekler): tablolar, güvenlik kuralları, sipariş/ödeme akışı, satıcı/kurye başvuruları
    3. `supabase/storage.sql`: fotoğraf kovası (herkese açık) ve belge kovası (özel)
    4. `supabase/realtime.sql`: anlık güncellemeler
 3. **Kimlik doğrulama ayarları:** *Authentication → URL Configuration*
@@ -118,11 +119,22 @@ Diğer ayarlar:
   - Tüm kullanıcılar için iki onay zorunludur: Kullanım Koşulları + KVKK Aydınlatma Metni kabulü ve **KVKK açık rızası**. Onay tarihleri kaydedilir.
 - **Satıcılar:** Satış yapmak için şunlar **zorunludur**:
   - **e-Devlet onaylı hijyen belgesi** (fotoğraf veya PDF) ve barkod numarası
+  - **gıda işletmesi kayıt numarası** (İl/İlçe Tarım ve Orman Müdürlüğü, 5996 sayılı Kanun). Onaydan sonra ilanlarda ve satıcı profilinde gösterilir.
   - IBAN
   - **Satıcı Beyanı ve Sorumluluk Taahhüdü**: Sağlık Bakanlığı ve gıda mevzuatına ilişkin risk ve koşulların kabulü, sonuçlardan bizzat sorumluluk
   - belgelerin işlenmesine açık rıza
 
   Admin belgeyi inceleyip onaylayana kadar ilan verilemez. Onaysız satıcının ilanları sunucuda da gizlenir.
+- **Gıda güvenliği (her ilanda zorunlu):**
+  - Türk Gıda Kodeksi’ndeki 14 alerjen grubundan içerdikleri ya da açık “alerjen içermez” beyanı. Alerjenler ilan detayında ve sipariş ekranında uyarı olarak gösterilir.
+  - Son tüketim ve saklama bilgisi.
+  - **Yasaklı ürün onayı:** çiğ et, çiğ süt, çiğ yumurtalı ürünler, ev konservesi, yabani mantar, alkol, takviye ve “şifalı” ürünler satılamaz. Satıcı her kayıtta onaylar.
+  - **Kargo yalnızca oda sıcaklığında dayanıklı** (soğuk zincir gerektirmeyen) ürünlerde seçilebilir. Sunucuda da kısıt olarak uygulanır.
+  - **Hijyen şikayetinde otomatik yayından kaldırma:** ürünü satın almış bir alıcıdan 1 şikayet veya 2 farklı kullanıcıdan şikayet gelirse ilan hemen gizlenir.
+    - Satıcı ilanı kendisi açamaz; satıcıya ve adminlere acil bildirim gider.
+    - Admin, “Temiz, yayına al” veya “Kalıcı kaldır” ile sonuçlandırır.
+    - Şikayet ekranında kullanıcı sağlık kuruluşu ve ALO 174 Gıda Hattı’na yönlendirilir.
+  - **Gıda Güvenliği Kuralları** sayfası: `/legal/food`.
 - **Kuryeler:**
   - Başvuru için **A2 veya B sınıfı ehliyet** (sınıf, belge no ve fotoğraf), telefon, hizmet ili ve ilçeleri, Kurye Beyanı ve açık rıza zorunludur.
   - Onaylanan kuryeler **Kurye Bul** ekranında hizmet verdikleri ilçelerdeki kullanıcılara listelenir. Aynı ilçeye hizmet verenler ve müsait olanlar önce gelir.
@@ -150,8 +162,8 @@ Diğer ayarlar:
 ```bash
 npx tsc --noEmit     # tip kontrolü
 npm run lint         # kod kalitesi
-npm test              # iş kuralları (88 test): konum, onaylar, satıcı/kurye başvurusu, kargo, ödeme/iade, satıcı ödemesi
-npm run test:db       # Supabase şeması (134 test): PGlite üzerinde gerçek PostgreSQL ile RLS ve sunucu fonksiyonları
+npm test              # iş kuralları (109 test): konum, onaylar, satıcı/kurye başvurusu, gıda güvenliği, hijyen incelemesi, kargo, ödeme/iade
+npm run test:db       # Supabase şeması (154 test): PGlite üzerinde gerçek PostgreSQL ile RLS ve sunucu fonksiyonları
 npm run test:payments # online ödeme (29 test): iyzico imzası (resmi iyzipay algoritmasıyla), gerçek şema + sahte iyzico ile uçtan uca ödeme, red, imza sahteciliği, iade
 npm run test:all      # hepsi
 ```
@@ -165,7 +177,7 @@ npm run test:all      # hepsi
 1. **Web sürümünü yayınla** (gizlilik politikası adresi için): `npx expo export -p web` komutu `dist/` klasörünü üretir. Bu klasörü Netlify, Vercel veya Cloudflare Pages’e yükle; tüm yolların `index.html`’e yönlenmesini (SPA) aç. Mağazalara verilecek adresler:
    - Gizlilik politikası / KVKK: `https://ALANADIN/legal/privacy`
    - Kullanım koşulları: `https://ALANADIN/legal/terms`
-   - Açık rıza, satıcı ve kurye beyanları, mesafeli satış: `/legal/consent`, `/legal/seller`, `/legal/courier`, `/legal/sales`
+   - Açık rıza, satıcı ve kurye beyanları, mesafeli satış, gıda güvenliği kuralları: `/legal/consent`, `/legal/seller`, `/legal/courier`, `/legal/sales`, `/legal/food`
 2. **Ortam değişkenleri:** `.env` dosyasındaki değerleri expo.dev’de projenin *Environment variables* bölümüne "preview" ve "production" ortamları için gir (ya da `npx eas-cli@latest env:create`).
 3. **Derle:**
    ```bash
@@ -223,6 +235,7 @@ lezzethub-app/
 
 - **Push bildirimleri:** Bildirimler şu an uygulama açıkken görünür (uygulama içi merkez ve anlık güncelleme). Uygulama kapalıyken bildirim için `expo-notifications` ve bir Supabase Edge Function eklenmeli.
 - **Büyüme:** İlk sürüm, kullanıcının görmeye yetkili olduğu verileri tek seferde çeker. Bu, bölgesel ölçekte (birkaç bin ilan) yeterlidir. Daha büyük ölçekte sayfalama eklenmelidir.
+- **Gıda işletmesi kaydı:** Kayıt numarası admin tarafından elle kontrol edilir; Tarım ve Orman Bakanlığı’nın kamuya açık bir sorgu API’si olmadığından otomatik doğrulanmaz.
 - **Belge doğrulama:** Hijyen belgesi ve ehliyet admin tarafından elle kontrol edilir (e-Devlet Belge Doğrulama kısayolu var). e-Devlet’in kamuya açık bir doğrulama API’si olmadığından otomatik doğrulama yapılmaz.
 - **Kurye yakınlığı:** “Yakın” ilçe düzeyinde belirlenir (kuryenin seçtiği hizmet ilçeleri). GPS tabanlı mesafe hesabı yoktur.
 - **Satıcı ödemesi:** Havale/EFT elle yapılıp işaretlenir. iyzico Pazaryeri’ne geçildiğinde otomatik bölüştürülebilir.

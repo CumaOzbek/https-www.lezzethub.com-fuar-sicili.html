@@ -2,21 +2,21 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Text, View } from 'react-native';
 
-import { LoginRequired } from '../components/domain';
+import { ConsentCheck, LegalLink, LoginRequired } from '../components/domain';
 import { useFeedback } from '../components/feedback';
 import { PhotoManager } from '../components/photos';
 import { Button, Card, Chip, EmptyState, Field, Header, LocationBadge, Notice, Row, Screen, StickyFooter, Toggle } from '../components/ui';
 import { calcBreakdown } from '../lib/commission';
-import { VERIFICATION_LABEL, shippingPayerText, tl } from '../lib/format';
+import { VERIFICATION_LABEL, allergenShort, shippingPayerText, tl } from '../lib/format';
 import { useStore } from '../lib/store';
 import { colors, font } from '../lib/theme';
 import { canSell } from '../lib/api';
-import { CATEGORIES, type CategoryKey, type DeliveryMethod, type ShippingPayer } from '../lib/types';
+import { ALLERGENS, CATEGORIES, PROHIBITED_FOODS, type AllergenKey, type CategoryKey, type DeliveryMethod, type ShippingPayer } from '../lib/types';
 
 export default function ListingForm() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { db, me, actions } = useStore();
-  const { run, confirm } = useFeedback();
+  const { run, confirm, toast } = useFeedback();
   const existing = id ? db.listings.find((l) => l.id === id) : undefined;
 
   const [title, setTitle] = useState(existing?.title ?? '');
@@ -27,7 +27,13 @@ export default function ListingForm() {
   const [prepTime, setPrepTime] = useState(existing?.prepTime ?? '');
   const [delivery, setDelivery] = useState<DeliveryMethod[]>(existing?.delivery ?? ['pickup']);
   const [shippingPayer, setShippingPayer] = useState<ShippingPayer>(existing?.shippingPayer ?? 'buyer');
-  const [active, setActive] = useState(existing ? existing.status === 'active' : true);
+  const [allergens, setAllergens] = useState<AllergenKey[]>(existing?.allergens ?? []);
+  const [noAllergens, setNoAllergens] = useState(!!existing && existing.allergens.length === 0);
+  const [shelfLife, setShelfLife] = useState(existing?.shelfLife ?? '');
+  const [shelfStable, setShelfStable] = useState(existing?.shelfStable ?? false);
+  // Yasaklı ürün onayı her kayıtta yeniden verilir.
+  const [safetyConfirmed, setSafetyConfirmed] = useState(false);
+  const [active, setActive] = useState(existing ? existing.status === 'active' && !existing.underReview : true);
   const [saving, setSaving] = useState(false);
 
   if (!me) {
@@ -64,8 +70,23 @@ export default function ListingForm() {
 
   const shipping = delivery.includes('courier') || delivery.includes('cargo');
 
-  const toggleDelivery = (m: DeliveryMethod, on: boolean) =>
+  const toggleDelivery = (m: DeliveryMethod, on: boolean) => {
+    if (m === 'cargo' && on && !shelfStable) {
+      toast('Kargo yalnızca oda sıcaklığında dayanıklı ürünlerde seçilebilir. Önce ürünün soğuk zincir gerektirmediğini işaretle.', 'error');
+      return;
+    }
     setDelivery((d) => (on ? Array.from(new Set([...d, m])) : d.filter((x) => x !== m)));
+  };
+
+  const toggleAllergen = (a: AllergenKey) => {
+    setNoAllergens(false);
+    setAllergens((list) => (list.includes(a) ? list.filter((x) => x !== a) : [...list, a]));
+  };
+
+  const setStable = (v: boolean) => {
+    setShelfStable(v);
+    if (!v) setDelivery((d) => d.filter((x) => x !== 'cargo'));
+  };
 
   const priceNum = Number(price.replace(',', '.'));
   const preview = Number.isFinite(priceNum) && priceNum > 0 ? calcBreakdown(priceNum, 1) : null;
@@ -74,7 +95,22 @@ export default function ListingForm() {
     setSaving(true);
     await run(async () => {
       const l = await actions.saveListing(
-        { title, description, price: priceNum, category, images, prepTime, delivery, shippingPayer, status: active ? 'active' : 'passive' },
+        {
+          title,
+          description,
+          price: priceNum,
+          category,
+          images,
+          prepTime,
+          delivery,
+          shippingPayer,
+          allergens,
+          noAllergens,
+          shelfLife,
+          shelfStable,
+          safetyConfirmed,
+          status: active ? 'active' : 'passive',
+        },
         existing?.id,
       );
       router.replace(`/listing/${l.id}`);
@@ -97,7 +133,7 @@ export default function ListingForm() {
         header={<Header title={existing ? 'İlanı Düzenle' : 'Yeni İlan'} subtitle="Ev yapımı lezzetini tanıt" />}
         footer={
           <StickyFooter>
-            <Button title={existing ? 'Değişiklikleri Kaydet' : 'İlanı Yayınla'} icon="checkmark-circle-outline" onPress={save} loading={saving} />
+            <Button title={existing ? 'Değişiklikleri Kaydet' : 'İlanı Yayınla'} icon="checkmark-circle-outline" onPress={save} loading={saving} disabled={!safetyConfirmed} />
           </StickyFooter>
         }
       >
@@ -132,10 +168,53 @@ export default function ListingForm() {
           <Field label="Müsaitlik / hazırlanma süresi" icon="time-outline" value={prepTime} onChangeText={setPrepTime} placeholder="Ör. 1 gün önceden sipariş, 2 saatte hazır" maxLength={120} />
         </Card>
 
+        <Text style={[font.h3, { marginTop: 20, marginBottom: 4 }]}>Gıda güvenliği bilgileri</Text>
+        <Text style={[font.small, { marginBottom: 10 }]}>Alıcılar bu bilgileri sipariş vermeden önce görür. Yanlış beyan alıcının sağlığını tehlikeye atar ve sorumluluğu sana aittir.</Text>
+        <Card>
+          <Text style={[font.small, { fontWeight: '700', color: colors.inkSoft, marginBottom: 8 }]}>Alerjenler (içerdiklerini işaretle) *</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {ALLERGENS.map((a) => (
+              <Chip key={a.key} label={allergenShort(a.key)} active={allergens.includes(a.key)} onPress={() => toggleAllergen(a.key)} />
+            ))}
+          </View>
+          <View style={{ height: 10 }} />
+          <Toggle
+            label="Alerjen içermez"
+            description="Yukarıdaki 14 alerjen grubundan hiçbirini içermediğini beyan ediyorum."
+            icon="leaf-outline"
+            value={noAllergens}
+            onChange={(v) => {
+              setNoAllergens(v);
+              if (v) setAllergens([]);
+            }}
+          />
+          <Field
+            label="Son tüketim ve saklama bilgisi *"
+            icon="thermometer-outline"
+            value={shelfLife}
+            onChangeText={setShelfLife}
+            placeholder="Ör. Buzdolabında 2 gün · Oda sıcaklığında 7 gün"
+            maxLength={160}
+          />
+          <Toggle
+            label="Oda sıcaklığında dayanıklı"
+            description="Soğuk zincir gerektirmez, oda sıcaklığında en az 3 gün bozulmaz (kargo için zorunlu)."
+            icon="sunny-outline"
+            value={shelfStable}
+            onChange={setStable}
+          />
+        </Card>
+
         <Text style={[font.h3, { marginTop: 20, marginBottom: 10 }]}>Teslimat seçenekleri</Text>
         <Toggle label="Elden Teslim" description="Alıcı adresinden teslim alır" icon="hand-left-outline" value={delivery.includes('pickup')} onChange={(v) => toggleDelivery('pickup', v)} />
         <Toggle label="Kurye" description="Yakın mahallelere kuryeyle gönderim (Kurye Bul’dan onaylı kurye bulabilirsin)" icon="bicycle" value={delivery.includes('courier')} onChange={(v) => toggleDelivery('courier', v)} />
-        <Toggle label="Kargo" description="Türkiye’nin her yerine kargoyla gönderim (bozulmayan ürünler için)" icon="cube-outline" value={delivery.includes('cargo')} onChange={(v) => toggleDelivery('cargo', v)} />
+        <Toggle
+          label="Kargo"
+          description={shelfStable ? 'Türkiye’nin her yerine kargoyla gönderim' : 'Yalnızca oda sıcaklığında dayanıklı ürünlerde seçilebilir'}
+          icon="cube-outline"
+          value={delivery.includes('cargo')}
+          onChange={(v) => toggleDelivery('cargo', v)}
+        />
         {delivery.length === 0 && <Notice tone="red" icon="alert-circle-outline" text="En az bir teslimat seçeneği seçmelisin." />}
         {shipping && (
           <Card style={{ marginTop: 4 }}>
@@ -152,6 +231,19 @@ export default function ListingForm() {
           </Card>
         )}
 
+        <Text style={[font.h3, { marginTop: 20, marginBottom: 10 }]}>Yasaklı ürün onayı</Text>
+        <Card style={{ marginBottom: 10 }}>
+          <Text style={[font.small, { marginBottom: 6, fontWeight: '700', color: colors.inkSoft }]}>Aşağıdaki yüksek riskli ürünlerin satışı yasaktır:</Text>
+          {PROHIBITED_FOODS.map((p) => (
+            <Text key={p} style={[font.small, { lineHeight: 19 }]}>
+              • {p}
+            </Text>
+          ))}
+        </Card>
+        <ConsentCheck checked={safetyConfirmed} onChange={setSafetyConfirmed}>
+          Bu ürün yasaklı ürünlerden değildir; <LegalLink doc="food" label="Gıda Güvenliği Kuralları" />’na uygun hazırlandı ve bilgiler doğrudur.
+        </ConsentCheck>
+
         <Text style={[font.h3, { marginTop: 20, marginBottom: 10 }]}>Durum</Text>
         <Toggle
           label={active ? 'Yayında' : 'Pasif'}
@@ -160,7 +252,10 @@ export default function ListingForm() {
           value={active}
           onChange={setActive}
         />
-        {existing?.removedByAdmin && <Notice tone="red" icon="alert-circle-outline" text="Bu ilan yönetici tarafından yayından kaldırıldı; tekrar yayına alınamaz." />}
+        {existing?.underReview && (
+          <Notice tone="red" icon="alert-circle-outline" title="Hijyen incelemesi" text="Bu ilan hijyen / gıda güvenliği şikayeti nedeniyle yayından kaldırıldı. Yönetici incelemesi bitene kadar yayına alınamaz." />
+        )}
+        {existing?.removedByAdmin && !existing.underReview && <Notice tone="red" icon="alert-circle-outline" text="Bu ilan yönetici tarafından yayından kaldırıldı; tekrar yayına alınamaz." />}
 
         <Card style={{ marginTop: 10, padding: 14 }}>
           <Row style={{ justifyContent: 'space-between' }}>

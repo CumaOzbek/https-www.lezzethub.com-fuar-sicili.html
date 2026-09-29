@@ -1,11 +1,11 @@
 // İlk açılışta yüklenen örnek veriler (demo hesaplar, Türkiye genelinden ilanlar, örnek siparişler).
 // Tüm kişiler, telefonlar, IBAN'lar ve belgeler uydurmadır.
-import { createOrder, markPayout, orderAction, payWithTestCard, saveListing, sendMessage, setShipment } from './api';
+import { createOrder, markPayout, orderAction, payWithTestCard, reportContent, saveListing, sendMessage, setShipment } from './api';
 import type { ListingInput } from './api';
 import { SAMPLE_HYGIENE_DOC, SAMPLE_LICENSE_DOC } from './sample-docs';
 import type { CourierProfile, DB, User, Verification } from './types';
 
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 
 export const DEMO_ACCOUNTS = [
   { label: 'Admin', email: 'admin@lezzethub.com', password: 'admin123', hint: 'Yönetici paneli' },
@@ -91,7 +91,23 @@ const USERS: SeedUser[] = [
   },
 ];
 
-type SeedListing = Omit<ListingInput, 'images'> & { owner: string };
+type SeedListing = Omit<ListingInput, 'images' | 'allergens' | 'noAllergens' | 'shelfLife' | 'shelfStable' | 'safetyConfirmed'> & { owner: string };
+
+/** İlanların alerjen, son tüketim ve dayanıklılık bilgileri (başlığa göre). */
+const FOOD: Record<string, Pick<ListingInput, 'allergens' | 'shelfLife' | 'shelfStable'>> = {
+  'Antakya Künefesi (Tepsi)': { allergens: ['sut', 'gluten', 'kuruyemis'], shelfLife: 'Sıcak tüketilmeli; buzdolabında 1 gün', shelfStable: false },
+  'Tepsi Kebabı': { allergens: ['gluten'], shelfLife: 'Aynı gün tüketilmeli; buzdolabında 1 gün', shelfStable: false },
+  Haytalı: { allergens: ['sut'], shelfLife: 'Buzdolabında 2 gün', shelfStable: false },
+  'Oruk (İçli Köfte) — 10’lu': { allergens: ['gluten', 'kuruyemis'], shelfLife: 'Pişmiş: buzdolabında 2 gün · Donuk: -18°C’de 1 ay', shelfStable: false },
+  'Kömbe (Hatay Çöreği) — 1 kg': { allergens: ['gluten', 'kuruyemis', 'susam', 'yumurta'], shelfLife: 'Oda sıcaklığında, kapalı kapta 10 gün', shelfStable: true },
+  'Taze Humus & Muhammara Tabağı': { allergens: ['susam', 'kuruyemis', 'gluten'], shelfLife: 'Buzdolabında 2 gün', shelfStable: false },
+  'Süzme Mercimek Çorbası (1 lt)': { allergens: ['sut', 'kereviz'], shelfLife: 'Buzdolabında 2 gün', shelfStable: false },
+  'Zahter Salatası & Biberli Ekmek': { allergens: ['gluten'], shelfLife: 'Aynı gün tüketilmeli', shelfStable: false },
+  'Ev Yapımı Nar Ekşisi (500 ml)': { allergens: [], shelfLife: 'Açılmadan 12 ay; açıldıktan sonra buzdolabında 3 ay', shelfStable: true },
+  'Ev Yapımı Limonata (1 lt)': { allergens: [], shelfLife: 'Buzdolabında 2 gün', shelfStable: false },
+  'Antep Fıstıklı Ev Baklavası (1 kg)': { allergens: ['gluten', 'sut', 'kuruyemis'], shelfLife: 'Oda sıcaklığında 7 gün, buzdolabına koymayın', shelfStable: true },
+  'Kayseri Usulü Ev Mantısı (1 kg, dondurulmuş)': { allergens: ['gluten', 'yumurta', 'sut'], shelfLife: 'Dondurucuda (-18°C) 2 ay; çözdükten sonra tekrar dondurulmaz', shelfStable: false },
+};
 
 const LISTINGS: SeedListing[] = [
   {
@@ -146,13 +162,13 @@ const LISTINGS: SeedListing[] = [
   },
   {
     owner: 'u-serkan', title: 'Antep Fıstıklı Ev Baklavası (1 kg)', category: 'tatli', price: 850, shippingPayer: 'seller',
-    description: 'El açması 40 kat yufka ve bol Antep fıstığı. Özel kutusunda, soğutucu paketle Türkiye’nin her yerine ücretsiz kargo. İçerik: gluten, süt ürünü, fıstık.',
+    description: 'El açması 40 kat yufka ve bol Antep fıstığı. Özel kutusunda, darbeye dayanıklı paketle Türkiye’nin her yerine ücretsiz kargo.',
     prepTime: '2 iş günü içinde kargoda', delivery: ['cargo'], status: 'active',
   },
   {
     owner: 'u-serkan', title: 'Kayseri Usulü Ev Mantısı (1 kg, dondurulmuş)', category: 'hamur-isi', price: 380, shippingPayer: 'buyer',
-    description: 'Minicik bohçalar, dana kıymalı. Dondurulmuş olarak soğuk zincirle kargolanır; yoğurt ve sos tarifiyle birlikte.',
-    prepTime: '1 iş günü içinde kargoda', delivery: ['cargo', 'pickup'], status: 'active',
+    description: 'Minicik bohçalar, dana kıymalı. Dondurulmuş olarak teslim edilir (soğuk zincir gerektiği için kargo yok); yoğurt ve sos tarifiyle birlikte.',
+    prepTime: '1 gün önceden sipariş', delivery: ['pickup', 'courier'], status: 'active',
   },
 ];
 
@@ -180,6 +196,7 @@ export async function createSeed(hash: (password: string) => Promise<string>): P
     docUri: kind === 'seller' ? SAMPLE_HYGIENE_DOC : SAMPLE_LICENSE_DOC,
     docType: 'image',
     docNumber: kind === 'seller' ? `MEB-HYG-${1000 + n}-DEMO` : `DEMO${900000 + n}`,
+    foodRegistrationNo: kind === 'seller' ? `TR-DEMO-K-${String(10000 + n)}` : undefined,
     licenseClass: kind === 'courier' ? (userId === 'u-burak' ? 'B' : 'A2') : undefined,
     iban: kind === 'seller' ? demoIban('00062', String(1000000000000000 + n)) : undefined,
     ibanHolder: kind === 'seller' ? db.users.find((u) => u.id === userId)!.name : undefined,
@@ -189,13 +206,20 @@ export async function createSeed(hash: (password: string) => Promise<string>): P
     reviewedAt: status === 'pending' ? undefined : created,
   });
   for (const u of db.users) {
-    if (u.sellerStatus !== 'none') db.verifications.push(verification(u.id, 'seller', u.sellerStatus as Verification['status']));
+    if (u.sellerStatus !== 'none') {
+      const v = verification(u.id, 'seller', u.sellerStatus as Verification['status']);
+      db.verifications.push(v);
+      if (u.sellerStatus === 'approved') u.foodRegistrationNo = v.foodRegistrationNo;
+    }
     if (u.courierStatus !== 'none') db.verifications.push(verification(u.id, 'courier', u.courierStatus as Verification['status']));
   }
   db.couriers = COURIERS.map((c) => ({ ...c, updatedAt: created }));
 
   const ids: string[] = [];
-  for (const { owner, ...l } of LISTINGS) ids.push(saveListing(db, owner, { ...l, images: [] }).id);
+  for (const { owner, ...l } of LISTINGS) {
+    const food = FOOD[l.title]!;
+    ids.push(saveListing(db, owner, { ...l, ...food, noAllergens: food.allergens.length === 0, safetyConfirmed: true, images: [] }).id);
+  }
 
   const U = (id: string) => db.users.find((u) => u.id === id)!;
   const admin = U('u-admin');
@@ -234,6 +258,10 @@ export async function createSeed(hash: (password: string) => Promise<string>): P
 
   // 5) Satıcı onayı bekleyen sipariş (Mehmet → Ayşe, künefe)
   createOrder(db, 'u-mehmet', { listingId: ids[0]!, quantity: 2, appointment: at(3, 20), delivery: 'pickup', address: '', note: 'Fıstıklı olsun lütfen 🙏' });
+
+  // 6) Hijyen şikayeti örneği: iki farklı kişiden şikayet → ilan otomatik incelemeye alınır.
+  reportContent(db, 'u-mehmet', { targetType: 'listing', targetId: ids[7]!, reason: 'hygiene', note: 'Salatada yabancı madde vardı.' });
+  reportContent(db, 'u-deniz', { targetType: 'listing', targetId: ids[7]!, reason: 'hygiene', note: 'Ürün bayat geldi.' });
 
   // Geçmiş tarihlere yay: örnek siparişler "gerçek" görünsün.
   const shift = (iso: string, h: number) => new Date(new Date(iso).getTime() - h * 3600000).toISOString();

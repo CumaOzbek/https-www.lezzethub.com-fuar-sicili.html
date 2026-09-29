@@ -5,7 +5,9 @@ import { calcBreakdown } from './commission';
 import { DELIVERY_LABEL, STATUS_META, appointmentText, tl } from './format';
 import { isValidDistrict, isValidProvince } from './locations';
 import {
+  ALLERGENS,
   MAX_LISTING_PHOTOS,
+  type AllergenKey,
   type CategoryKey,
   type CourierProfile,
   type DB,
@@ -232,11 +234,16 @@ function removeUserData(db: DB, userId: string) {
 
 /* ------------------------------ Satıcı ve kurye başvuruları ------------------------------ */
 
+/** Gıda işletmesi kayıt numarası: harf, rakam, - / . ve boşluk; 5–40 karakter (ör. TR-34-K-012345). */
+export const isFoodRegistrationNo = (v: string) => /^[A-Za-z0-9ÇĞİÖŞÜçğıöşü\-/. ]{5,40}$/.test(v.trim()) && /\d{3,}/.test(v);
+
 export interface SellerApplicationInput {
   docUri: string;
   docType: DocumentType;
   /** e-Devlet belge doğrulama barkod numarası. */
   barcode: string;
+  /** Tarım ve Orman Bakanlığı gıda işletmesi kayıt numarası. */
+  foodRegistrationNo: string;
   iban: string;
   ibanHolder: string;
   /** Sağlık Bakanlığı ve Tarım ve Orman Bakanlığı mevzuatı, risk ve sorumluluk beyanı. */
@@ -248,6 +255,7 @@ export interface SellerApplicationInput {
 export function validateSellerApplication(input: SellerApplicationInput) {
   if (!input.docUri) fail('E-Devlet onaylı hijyen belgeni yüklemelisin.');
   if (input.barcode.replace(/\s/g, '').length < 8) fail('Belgenin e-Devlet doğrulama (barkod) numarasını girin.');
+  if (!isFoodRegistrationNo(input.foodRegistrationNo)) fail('Gıda işletmesi kayıt numaranı girin (İl/İlçe Tarım ve Orman Müdürlüğü’nden alınır).');
   if (!normalizeIban(input.iban)) fail('Geçerli bir TR IBAN girin (TR ile başlayan 26 karakter).');
   if (input.ibanHolder.trim().length < 3) fail('IBAN sahibinin adını soyadını girin.');
   if (!input.acceptDeclaration) fail('Satış yapabilmek için mevzuat ve sorumluluk beyanını onaylamalısın.');
@@ -268,6 +276,7 @@ export function submitSellerApplication(db: DB, userId: string, input: SellerApp
     docUri: input.docUri,
     docType: input.docType,
     docNumber: input.barcode.trim(),
+    foodRegistrationNo: input.foodRegistrationNo.trim().toLocaleUpperCase('tr-TR'),
     iban: normalizeIban(input.iban)!,
     ibanHolder: input.ibanHolder.trim(),
     declarationAt: t,
@@ -366,7 +375,10 @@ export function reviewVerification(db: DB, actor: User, verificationId: string, 
   v.status = approve ? 'approved' : 'rejected';
   v.adminNote = note?.trim() || undefined;
   v.reviewedAt = now();
-  if (v.kind === 'seller') user.sellerStatus = v.status;
+  if (v.kind === 'seller') {
+    user.sellerStatus = v.status;
+    if (approve) user.foodRegistrationNo = v.foodRegistrationNo;
+  }
   else user.courierStatus = v.status;
   const what = v.kind === 'seller' ? 'Satıcı' : 'Kurye';
   notify(
@@ -407,8 +419,17 @@ export interface ListingInput {
   prepTime: string;
   delivery: DeliveryMethod[];
   shippingPayer: ShippingPayer;
+  allergens: AllergenKey[];
+  /** Hiçbir alerjen içermediğinin açık beyanı (allergens boşsa zorunlu). */
+  noAllergens: boolean;
+  shelfLife: string;
+  shelfStable: boolean;
+  /** Yasaklı / yüksek riskli ürün içermediğinin onayı (her kayıtta zorunlu). */
+  safetyConfirmed: boolean;
   status: ListingStatus;
 }
+
+const ALLERGEN_KEYS = new Set<string>(ALLERGENS.map((a) => a.key));
 
 export function validateListing(input: ListingInput) {
   if (input.title.trim().length < 3) fail('Başlık en az 3 karakter olmalıdır.');
@@ -418,16 +439,32 @@ export function validateListing(input: ListingInput) {
   if (input.delivery.length === 0) fail('En az bir teslimat seçeneği seçmelisiniz.');
   if (input.shippingPayer !== 'buyer' && input.shippingPayer !== 'seller') fail('Kargo/kurye ücretinin kime ait olduğunu seçin.');
   if (input.images.length > MAX_LISTING_PHOTOS) fail(`En fazla ${MAX_LISTING_PHOTOS} fotoğraf ekleyebilirsin.`);
+  if (input.allergens.some((a) => !ALLERGEN_KEYS.has(a))) fail('Geçersiz alerjen seçimi.');
+  if (input.allergens.length === 0 && !input.noAllergens) fail('Alerjenleri işaretle ya da ürünün alerjen içermediğini beyan et.');
+  if (input.allergens.length > 0 && input.noAllergens) fail('Alerjen seçtiysen “alerjen içermez” beyanını kaldır.');
+  if (input.shelfLife.trim().length < 3) fail('Son tüketim ve saklama bilgisini yaz (ör. “Buzdolabında 2 gün”).');
+  if (input.delivery.includes('cargo') && !input.shelfStable) fail('Kargo yalnızca oda sıcaklığında dayanıklı, soğuk zincir gerektirmeyen ürünlerde seçilebilir.');
+  if (!input.safetyConfirmed) fail('Ürünün yasaklı / yüksek riskli gıdalardan olmadığını onaylamalısın.');
 }
 
 export function saveListing(db: DB, userId: string, input: ListingInput, listingId?: string): Listing {
   validateListing(input);
   const owner = getUser(db, userId) ?? fail('Kullanıcı bulunamadı.');
   if (!canSell(owner)) fail('İlan verebilmek için satıcı başvurunun (hijyen belgesi) onaylanması gerekir.');
-  const clean = { ...input, title: input.title.trim(), description: input.description.trim(), prepTime: input.prepTime.trim() };
+  const { noAllergens: _n, safetyConfirmed: _s, ...rest } = input;
+  const clean = {
+    ...rest,
+    title: input.title.trim(),
+    description: input.description.trim(),
+    prepTime: input.prepTime.trim(),
+    shelfLife: input.shelfLife.trim(),
+    allergens: [...new Set(input.allergens)],
+    safetyConfirmedAt: now(),
+  };
   if (listingId) {
     const l = getListing(db, listingId) ?? fail('İlan bulunamadı.');
     if (l.ownerId !== userId) fail('Bu ilanı düzenleme yetkiniz yok.');
+    if (l.underReview && input.status === 'active') fail(UNDER_REVIEW_MSG);
     if (l.removedByAdmin && input.status === 'active') fail('Bu ilan yönetici tarafından yayından kaldırıldı.');
     Object.assign(l, { ...clean, updatedAt: now() });
     return l;
@@ -446,14 +483,18 @@ export function saveListing(db: DB, userId: string, input: ListingInput, listing
   return listing;
 }
 
+const UNDER_REVIEW_MSG = 'Bu ilan hijyen şikayeti nedeniyle incelemede; inceleme bitene kadar yayına alınamaz.';
+
 export function setListingStatus(db: DB, actor: User, listingId: string, status: ListingStatus) {
   const l = getListing(db, listingId) ?? fail('İlan bulunamadı.');
   if (actor.role === 'admin') {
     l.status = status;
     l.removedByAdmin = status === 'passive';
+    if (status === 'active') l.underReview = false;
     if (status === 'passive' && l.ownerId !== actor.id) notify(db, l.ownerId, 'İlanın yayından kaldırıldı', `“${l.title}” ilanı yönetici tarafından yayından kaldırıldı.`);
   } else {
     if (l.ownerId !== actor.id) fail('Bu ilan üzerinde yetkiniz yok.');
+    if (l.underReview && status === 'active') fail(UNDER_REVIEW_MSG);
     if (l.removedByAdmin && status === 'active') fail('Bu ilan yönetici tarafından yayından kaldırıldı.');
     if (status === 'active' && !canSell(actor)) fail('İlanı yayına almak için satıcı başvurunun onaylı olması gerekir.');
     l.status = status;
@@ -763,7 +804,43 @@ export function reportContent(db: DB, reporterId: string, input: ReportInput) {
   const dup = db.reports.some((r) => r.reporterId === reporterId && r.targetId === input.targetId && r.status === 'open');
   if (dup) fail('Bu içerik için açık bir şikayetin zaten var. İnceleniyor.');
   db.reports.unshift({ id: uid(), reporterId, ...input, note: input.note.trim().slice(0, 500), status: 'open', createdAt: now() });
+  if (input.targetType === 'listing' && input.reason === 'hygiene' && hygieneHoldApplies(db, input.targetId, reporterId)) {
+    const l = getListing(db, input.targetId)!;
+    if (!l.underReview) {
+      l.underReview = true;
+      l.status = 'passive';
+      l.updatedAt = now();
+      notify(db, l.ownerId, 'İlanın incelemeye alındı ⚠️', `“${l.title}” hakkında hijyen / gıda güvenliği şikayeti geldi. İlan inceleme bitene kadar yayından kaldırıldı; yönetici seninle iletişime geçebilir.`);
+      notifyAdmins(db, 'ACİL: Hijyen şikayeti 🚨', `“${l.title}” ilanı hijyen şikayeti nedeniyle otomatik olarak yayından kaldırıldı. Lütfen 24 saat içinde inceleyin.`);
+      return;
+    }
+  }
   notifyAdmins(db, 'Yeni şikayet 🚩', input.targetType === 'listing' ? 'Bir ilan şikayet edildi.' : 'Bir kullanıcı şikayet edildi.');
+}
+
+/** Hijyen şikayetinde otomatik yayından kaldırma: ürünü satın almış bir alıcıdan 1 şikayet veya 2 farklı kişiden şikayet. */
+export const HYGIENE_HOLD_REPORTS = 2;
+
+export function hygieneHoldApplies(db: DB, listingId: string, reporterId: string) {
+  const verifiedBuyer = db.orders.some(
+    (o) => o.listingId === listingId && o.buyerId === reporterId && (o.status === 'paid' || o.status === 'completed'),
+  );
+  if (verifiedBuyer) return true;
+  const reporters = new Set(db.reports.filter((r) => r.targetId === listingId && r.reason === 'hygiene' && r.status === 'open').map((r) => r.reporterId));
+  return reporters.size >= HYGIENE_HOLD_REPORTS;
+}
+
+/** Admin: incelemedeki ilanı temize çıkarıp yeniden yayına alır ve ilgili açık hijyen şikayetlerini kapatır. */
+export function reinstateListing(db: DB, actor: User, listingId: string) {
+  assertAdmin(actor);
+  const l = getListing(db, listingId) ?? fail('İlan bulunamadı.');
+  const owner = getUser(db, l.ownerId);
+  l.underReview = false;
+  l.removedByAdmin = false;
+  if (owner?.active && canSell(owner)) l.status = 'active';
+  l.updatedAt = now();
+  db.reports.filter((r) => r.targetId === listingId && r.status === 'open').forEach((r) => (r.status = 'resolved'));
+  notify(db, l.ownerId, 'İlanın yeniden yayında ✅', `“${l.title}” ilanı incelendi ve yeniden yayına alındı.`);
 }
 
 export function blockUser(db: DB, blockerId: string, blockedId: string) {

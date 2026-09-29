@@ -46,6 +46,11 @@ export default function UserProfile() {
         <View style={{ marginTop: 8 }}>
           <LocationBadge province={user.province} district={user.district} neighborhood={user.neighborhood} />
         </View>
+        {user.sellerStatus === 'approved' && (
+          <Text style={[font.small, { textAlign: 'center', marginTop: 8 }]}>
+            🛡 Hijyen belgesi onaylı{user.foodRegistrationNo ? ` · Gıda işletmesi kayıt no: ${user.foodRegistrationNo}` : ''}
+          </Text>
+        )}
         {!!user.bio && <Text style={[font.body, { textAlign: 'center', marginTop: 12 }]}>{user.bio}</Text>}
         <View style={{ flexDirection: 'row', gap: 26, marginTop: 16 }}>
           <View style={{ alignItems: 'center' }}>

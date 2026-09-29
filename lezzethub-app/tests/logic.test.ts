@@ -91,11 +91,13 @@ const reg = (over: Partial<api.RegisterInput> = {}): api.RegisterInput => ({
   {
     const db = clone(seed);
     const u = api.register(db, reg(), 'h');
-    const base = { title: 'Mantı', description: 'Ev yapımı mantı açıklaması', price: 100, category: 'hamur-isi' as const, images: [], prepTime: '', delivery: ['cargo' as const], shippingPayer: 'buyer' as const, status: 'active' as const };
+    const base = { title: 'Mantı', description: 'Ev yapımı mantı açıklaması', price: 100, category: 'hamur-isi' as const, images: [], prepTime: '', delivery: ['cargo' as const], shippingPayer: 'buyer' as const, allergens: ['gluten' as const], noAllergens: false, shelfLife: 'Oda sıcaklığında 5 gün', shelfStable: true, safetyConfirmed: true, status: 'active' as const };
     throws(() => api.saveListing(db, u.id, base), 'onaysız satıcı ilan veremez', 'hijyen belgesi');
-    const app = { docUri: 'file://doc.jpg', docType: 'image' as const, barcode: 'MEB-ABCD-1234', iban: 'TR330006100519786457841326', ibanHolder: 'Ali Veli', acceptDeclaration: true, acceptDocumentConsent: true };
+    const app = { docUri: 'file://doc.jpg', docType: 'image' as const, barcode: 'MEB-ABCD-1234', foodRegistrationNo: 'TR-35-K-004512', iban: 'TR330006100519786457841326', ibanHolder: 'Ali Veli', acceptDeclaration: true, acceptDocumentConsent: true };
     throws(() => api.submitSellerApplication(db, u.id, { ...app, docUri: '' }), 'belge zorunlu', 'hijyen belgeni');
     throws(() => api.submitSellerApplication(db, u.id, { ...app, barcode: '12' }), 'barkod zorunlu', 'barkod');
+    throws(() => api.submitSellerApplication(db, u.id, { ...app, foodRegistrationNo: '' }), 'gıda işletmesi kayıt no zorunlu', 'Gıda işletmesi');
+    throws(() => api.submitSellerApplication(db, u.id, { ...app, foodRegistrationNo: 'ABCDEF' }), 'kayıt no rakam içermeli', 'Gıda işletmesi');
     throws(() => api.submitSellerApplication(db, u.id, { ...app, iban: 'TR000' }), 'IBAN geçerli olmalı', 'IBAN');
     throws(() => api.submitSellerApplication(db, u.id, { ...app, acceptDeclaration: false }), 'mevzuat beyanı zorunlu', 'beyan');
     throws(() => api.submitSellerApplication(db, u.id, { ...app, acceptDocumentConsent: false }), 'belge açık rızası zorunlu', 'açık rıza');
@@ -111,9 +113,44 @@ const reg = (over: Partial<api.RegisterInput> = {}): api.RegisterInput => ({
     api.submitSellerApplication(db, u.id, app);
     api.reviewVerification(db, U(db, 'u-admin'), db.verifications.find((x) => x.userId === u.id)!.id, true);
     ok(U(db, u.id).sellerStatus === 'approved' && db.verifications.filter((x) => x.userId === u.id).length === 1, 'yeniden başvuru ve onay');
+    ok(U(db, u.id).foodRegistrationNo === 'TR-35-K-004512', 'onayda kayıt no profile işlenir');
     const l = api.saveListing(db, u.id, base);
     ok(l.province === 'İzmir' && l.district === 'Karşıyaka' && l.shippingPayer === 'buyer', 'onaylı satıcı ilan verir, il miras');
     throws(() => api.saveListing(db, u.id, { ...base, shippingPayer: 'x' as never }), 'ücret sorumlusu zorunlu');
+    // Gıda güvenliği alanları
+    throws(() => api.saveListing(db, u.id, { ...base, allergens: [], noAllergens: false }), 'alerjen beyanı zorunlu', 'Alerjen');
+    throws(() => api.saveListing(db, u.id, { ...base, noAllergens: true }), 'alerjen + içermez çelişkisi', 'beyanını kaldır');
+    throws(() => api.saveListing(db, u.id, { ...base, allergens: ['zehir' as never] }), 'geçersiz alerjen');
+    throws(() => api.saveListing(db, u.id, { ...base, shelfLife: '' }), 'son tüketim zorunlu', 'Son tüketim');
+    throws(() => api.saveListing(db, u.id, { ...base, shelfStable: false }), 'kargo için dayanıklılık zorunlu', 'Kargo yalnızca');
+    throws(() => api.saveListing(db, u.id, { ...base, safetyConfirmed: false }), 'yasaklı ürün onayı zorunlu', 'yasaklı');
+    const nl = api.saveListing(db, u.id, { ...base, delivery: ['pickup'], allergens: [], noAllergens: true, shelfStable: false });
+    ok(nl.allergens.length === 0 && !!nl.safetyConfirmedAt && !('noAllergens' in nl) && !('safetyConfirmed' in nl), 'alerjensiz beyan kaydı, geçici alanlar saklanmaz');
+    ok(l.allergens.join() === 'gluten' && l.shelfStable && l.shelfLife === 'Oda sıcaklığında 5 gün', 'gıda alanları kaydedilir');
+  }
+
+  /* Hijyen şikayetinde otomatik inceleme */
+  {
+    const db = clone(seed);
+    const z = db.listings.find((x) => x.title.startsWith('Zahter'))!;
+    ok(z.underReview === true && z.status === 'passive', 'demo: iki şikayetle incelemeye alınmış ilan');
+    const o1 = db.orders.find((o) => o.status === 'completed' && o.buyerId === 'u-mehmet' && o.payoutStatus === 'pending')!;
+    const oruk = db.listings.find((x) => x.id === o1.listingId)!;
+    ok(!api.hygieneHoldApplies(db, oruk.id, 'u-deniz'), 'satın almamış tek şikayet yetmez');
+    api.reportContent(db, 'u-mehmet', { targetType: 'listing', targetId: oruk.id, reason: 'hygiene', note: 'Midem bozuldu' });
+    ok(oruk.underReview === true && oruk.status === 'passive', 'satın almış alıcının şikayetiyle otomatik yayından kaldırma');
+    ok(db.notifications.some((n) => n.userId === oruk.ownerId && n.title.startsWith('İlanın incelemeye alındı')), 'satıcıya bildirim');
+    ok(db.notifications.some((n) => n.userId === 'u-admin' && n.title.startsWith('ACİL')), 'admine acil bildirim');
+    throws(() => api.setListingStatus(db, U(db, oruk.ownerId), oruk.id, 'active'), 'satıcı incelemedeki ilanı açamaz', 'incelemede');
+    throws(() => api.createOrder(db, 'u-deniz', { listingId: oruk.id, quantity: 1, appointment: fut(2), delivery: 'pickup', address: '', note: '' }), 'incelemedeki ilana sipariş yok');
+    throws(() => api.reinstateListing(db, U(db, 'u-mehmet'), oruk.id), 'admin olmayan geri açamaz', 'yönetici');
+    api.reinstateListing(db, U(db, 'u-admin'), oruk.id);
+    ok(!oruk.underReview && oruk.status === 'active' && !db.reports.some((r) => r.targetId === oruk.id && r.status === 'open'), 'admin geri açar, şikayetler kapanır');
+    // Kullanıcı şikayetleri ve hijyen dışı sebepler ilanı gizlemez
+    const h = db.listings.find((x) => x.title.startsWith('Taze Humus'))!;
+    api.reportContent(db, 'u-deniz', { targetType: 'listing', targetId: h.id, reason: 'misleading', note: '' });
+    api.reportContent(db, 'u-serkan', { targetType: 'listing', targetId: h.id, reason: 'misleading', note: '' });
+    ok(h.status === 'active' && !h.underReview, 'hijyen dışı şikayetler otomatik gizlemez');
   }
 
   /* Kurye başvurusu */

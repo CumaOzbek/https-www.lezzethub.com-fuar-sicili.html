@@ -2,6 +2,7 @@
 // ÖNEMLİ: Bu metinler bir başlangıç şablonudur. Yayından önce [köşeli parantez] içindeki alanları
 // doldurun ve metinleri mutlaka bir hukuk danışmanına kontrol ettirin.
 import { SUPPORT_EMAIL } from './config';
+import { ALLERGENS, PROHIBITED_FOODS } from './types';
 
 export interface LegalDoc {
   title: string;
@@ -9,7 +10,10 @@ export interface LegalDoc {
   sections: { heading: string; body: string }[];
 }
 
-export type LegalKey = 'privacy' | 'consent' | 'terms' | 'seller' | 'courier' | 'sales';
+export type LegalKey = 'privacy' | 'consent' | 'terms' | 'seller' | 'courier' | 'sales' | 'food';
+
+const ALLERGEN_LIST = ALLERGENS.map((a) => '• ' + a.label).join('\n');
+const PROHIBITED_LIST = PROHIBITED_FOODS.map((p) => '• ' + p).join('\n');
 
 const CONTROLLER = '[Şirket unvanı], [MERSİS no], [adres]';
 const UPDATED = '28 Eylül 2026';
@@ -28,7 +32,7 @@ export const LEGAL_DOCS: Record<LegalKey, LegalDoc> = {
         body:
           '• Kimlik ve iletişim: ad soyad, e-posta, telefon.\n' +
           '• Konum: il, ilçe, mahalle ve açık adres.\n' +
-          '• Satıcılar için: hijyen eğitimi belgesi ve e-Devlet doğrulama numarası, IBAN ve hesap sahibi adı.\n' +
+          '• Satıcılar için: hijyen eğitimi belgesi ve e-Devlet doğrulama numarası, gıda işletmesi kayıt numarası, IBAN ve hesap sahibi adı.\n' +
           '• Kuryeler için: sürücü belgesi (A2/B) görüntüsü ve belge numarası, hizmet bölgesi, telefon.\n' +
           '• İlan içerikleri: yemek fotoğrafları, açıklamalar, fiyatlar.\n' +
           '• İşlem bilgileri: siparişler, randevular, ödeme kayıtları (kartın yalnızca son 4 hanesi), kargo takip bilgisi, uygulama içi mesajlar.\n' +
@@ -106,7 +110,7 @@ export const LEGAL_DOCS: Record<LegalKey, LegalDoc> = {
       {
         heading: '3. Satıcılar',
         body:
-          'Satış yapmak için e-Devlet üzerinden doğrulanabilir hijyen eğitimi belgesinin yüklenmesi, Satıcı Beyanı ve Sorumluluk Taahhüdü’nün onaylanması ve belgenin platform tarafından onaylanması zorunludur. Satıcı; gıda güvenliği, hijyen, etiketleme, alerjen bildirimi, vergi ve diğer yasal yükümlülüklerden bizzat sorumludur.',
+          'Satış yapmak için e-Devlet üzerinden doğrulanabilir hijyen eğitimi belgesinin yüklenmesi, Tarım ve Orman Bakanlığı gıda işletmesi kayıt numarasının beyan edilmesi, Satıcı Beyanı ve Sorumluluk Taahhüdü’nün onaylanması ve belgenin platform tarafından onaylanması zorunludur. Her ilanda alerjenler, son tüketim/saklama bilgisi ve yasaklı ürün içermediği beyanı zorunludur. Satıcı; gıda güvenliği, hijyen, etiketleme, alerjen bildirimi, vergi ve diğer yasal yükümlülüklerden bizzat sorumludur.',
       },
       {
         heading: '4. Kuryeler',
@@ -121,18 +125,24 @@ export const LEGAL_DOCS: Record<LegalKey, LegalDoc> = {
           'Alıcıdan ürün tutarının %10’u, satıcıdan %15’i hizmet bedeli olarak alınır. Satıcının net kazancı, sipariş tamamlandıktan sonra kayıtlı IBAN’ına aktarılır. İptal ve iadeler Mesafeli Satış Sözleşmesi’ndeki koşullara göre yapılır.',
       },
       {
-        heading: '6. Yasak içerik ve davranışlar',
+        heading: '6. Yasaklı ürünler ve hijyen şikayetleri',
+        body:
+          'Gıda Güvenliği Kuralları’nda listelenen yüksek riskli ürünlerin satışı yasaktır; kargo yalnızca oda sıcaklığında dayanıklı ürünlerde kullanılabilir. ' +
+          'Bir ilan hakkında ürünü satın almış bir alıcıdan veya iki farklı kullanıcıdan hijyen / gıda güvenliği şikayeti geldiğinde ilan inceleme tamamlanana kadar otomatik olarak yayından kaldırılır. Gerekli görülen durumlarda yetkili makamlara (ALO 174 Gıda Hattı, İl Tarım ve Orman Müdürlüğü) bildirim yapılır.',
+      },
+      {
+        heading: '7. Yasak içerik ve davranışlar',
         body:
           'Hakaret, taciz, nefret söylemi, müstehcenlik, yanıltıcı veya başkasına ait fotoğraf, sahte belge, dolandırıcılık ve yasa dışı ürün satışı yasaktır; bu tür içeriklere karşı sıfır tolerans uygulanır. ' +
           'Uygunsuz ilan veya kullanıcıları “Şikayet et” özelliğiyle bildirebilir, kullanıcıları engelleyebilirsiniz. Şikayetler en geç 24 saat içinde incelenir; ihlal eden içerikler kaldırılır, hesaplar kapatılabilir ve gerektiğinde yetkili makamlara bildirilir.',
       },
       {
-        heading: '7. Sorumluluğun sınırı',
+        heading: '8. Sorumluluğun sınırı',
         body:
           'LezzetHub, satıcıların hazırladığı yemeklerin içeriğinden, hijyeninden ve kalitesinden, kuryelerin ve kargo firmalarının teslimat hizmetinden doğrudan sorumlu değildir. Belge onayı, belgenin görünür bilgilerinin kontrolünden ibarettir ve satıcının veya kuryenin yasal yükümlülüklerini ortadan kaldırmaz.',
       },
       {
-        heading: '8. Değişiklikler ve iletişim',
+        heading: '9. Değişiklikler ve iletişim',
         body: `Koşullar güncellenebilir; önemli değişiklikler uygulamada duyurulur. İletişim: ${SUPPORT_EMAIL}. Uyuşmazlıklarda Türkiye Cumhuriyeti hukuku uygulanır; tüketiciler Tüketici Hakem Heyetleri ve Tüketici Mahkemelerine başvurabilir.`,
       },
     ],
@@ -144,7 +154,7 @@ export const LEGAL_DOCS: Record<LegalKey, LegalDoc> = {
       {
         heading: '1. Belge beyanı',
         body:
-          'Yüklediğim hijyen eğitimi belgesinin bana ait, gerçek, geçerli ve e-Devlet üzerinden doğrulanabilir olduğunu; belgenin iptal edilmesi veya süresinin dolması halinde platformu derhal bilgilendireceğimi beyan ederim. Sahte veya başkasına ait belge yüklemenin hukuki ve cezai sonuçlarından bizzat sorumluyum.',
+          'Yüklediğim hijyen eğitimi belgesinin ve beyan ettiğim gıda işletmesi kayıt numarasının bana ait, gerçek ve geçerli olduğunu; belgenin veya kaydın iptal edilmesi ya da süresinin dolması halinde satışı durdurup platformu derhal bilgilendireceğimi beyan ederim. Sahte veya başkasına ait belge ya da numara kullanmanın hukuki ve cezai sonuçlarından bizzat sorumluyum.',
       },
       {
         heading: '2. Mevzuata uyum',
@@ -154,7 +164,7 @@ export const LEGAL_DOCS: Record<LegalKey, LegalDoc> = {
       {
         heading: '3. Riskler ve koşullar',
         body:
-          'Ev ortamında hazırlanan gıdaların; bozulma, çapraz bulaşma, alerjen, yanlış saklama ve taşıma gibi sağlık riskleri taşıdığını biliyorum. Yemekleri hijyen kurallarına uygun hazırlayacağımı, içerik ve alerjenleri ilanda eksiksiz belirteceğimi, soğuk zinciri ve uygun ambalajı sağlayacağımı, son tüketim bilgisini alıcıya bildireceğimi taahhüt ederim.',
+          'Ev ortamında hazırlanan gıdaların; bozulma, çapraz bulaşma, alerjen, yanlış saklama ve taşıma gibi sağlık riskleri taşıdığını biliyorum. Yemekleri hijyen kurallarına uygun hazırlayacağımı, içerik ve alerjenleri ilanda eksiksiz ve doğru belirteceğimi, soğuk zinciri ve uygun ambalajı sağlayacağımı, son tüketim ve saklama bilgisini alıcıya bildireceğimi, Gıda Güvenliği Kuralları’ndaki yasaklı ürünleri satmayacağımı ve soğuk zincir gerektiren ürünleri kargoyla göndermeyeceğimi taahhüt ederim. Hijyen şikayeti halinde ilanımın incelemeye alınabileceğini ve yetkili makamlara bildirilebileceğini kabul ederim.',
       },
       {
         heading: '4. Sorumluluk',
@@ -206,7 +216,7 @@ export const LEGAL_DOCS: Record<LegalKey, LegalDoc> = {
       {
         heading: '2. Konu, fiyat ve ödeme',
         body:
-          'Sözleşmenin konusu, sipariş ekranında adı, adedi, birim fiyatı ve toplam tutarı gösterilen üründür. Tüm fiyatlara KDV dahildir. Toplam tutar; ürün bedeli ile %10 alıcı hizmet bedelinden oluşur ve iyzico güvenli ödeme sayfasında kartla ödenir. Kurye/kargo ücreti ilanda “alıcı öder” olarak belirtilmişse ödemeye dahil değildir.',
+          'Sözleşmenin konusu, sipariş ekranında adı, adedi, birim fiyatı, alerjenleri, son tüketim/saklama bilgisi ve toplam tutarı gösterilen üründür. Tüm fiyatlara KDV dahildir. Toplam tutar; ürün bedeli ile %10 alıcı hizmet bedelinden oluşur ve iyzico güvenli ödeme sayfasında kartla ödenir. Kurye/kargo ücreti ilanda “alıcı öder” olarak belirtilmişse ödemeye dahil değildir.',
       },
       {
         heading: '3. Teslimat',
@@ -226,6 +236,40 @@ export const LEGAL_DOCS: Record<LegalKey, LegalDoc> = {
       {
         heading: '6. Şikayet ve uyuşmazlık',
         body: `Şikayetlerinizi ${SUPPORT_EMAIL} adresine iletebilirsiniz. Parasal sınırlar dahilinde Tüketici Hakem Heyetleri, aşan durumlarda Tüketici Mahkemeleri yetkilidir.`,
+      },
+    ],
+  },
+  food: {
+    title: 'Gıda Güvenliği Kuralları ve Yasaklı Ürünler',
+    updated: UPDATED,
+    sections: [
+      {
+        heading: '1. Satıcı olma şartları',
+        body:
+          '• E-Devlet üzerinden doğrulanabilir hijyen eğitimi belgesi.\n' +
+          '• İl/İlçe Tarım ve Orman Müdürlüğü’nden alınan gıda işletmesi kayıt numarası (5996 sayılı Kanun). Numara ilanlarda alıcılara gösterilir.\n' +
+          '• Satıcı Beyanı ve Sorumluluk Taahhüdü’nün onayı.',
+      },
+      {
+        heading: '2. Satışı yasak ürünler',
+        body: PROHIBITED_LIST + '\n\nSatıcı her ilanı kaydederken ürünün bu listede yer almadığını onaylar. Aykırı ilanlar kaldırılır ve hesap kapatılabilir.',
+      },
+      {
+        heading: '3. Her ilanda zorunlu bilgiler',
+        body:
+          '• Alerjenler (Türk Gıda Kodeksi’ndeki 14 alerjen grubu) ya da ürünün alerjen içermediğinin açık beyanı:\n' + ALLERGEN_LIST + '\n' +
+          '• Son tüketim ve saklama bilgisi (ör. “Buzdolabında 2 gün”).\n' +
+          '• İçerik ve porsiyon bilgisini içeren açıklama.',
+      },
+      {
+        heading: '4. Kargo ve taşıma',
+        body:
+          'Kargo yalnızca oda sıcaklığında dayanıklı, soğuk zincir gerektirmeyen ürünlerde (ör. kuru tatlılar, unlu mamuller, nar ekşisi, reçel) seçilebilir. Sulu yemekler, sütlü/kremalı tatlılar, et ve tavuk yemekleri ile dondurulmuş ürünler yalnızca elden teslim veya kısa mesafeli kurye ile teslim edilir. Ürünler kapalı, temiz ve gıdaya uygun ambalajda teslim edilmelidir.',
+      },
+      {
+        heading: '5. Hijyen şikayetleri',
+        body:
+          'Ürünü satın almış bir alıcıdan veya iki farklı kullanıcıdan hijyen / gıda güvenliği şikayeti gelen ilan, inceleme bitene kadar otomatik olarak yayından kaldırılır; satıcı ilanı kendisi yeniden açamaz. Yönetici 24 saat içinde inceler. Gıda zehirlenmesi şüphesinde alıcıların sağlık kuruluşuna başvurması ve ALO 174 Gıda Hattı’na bildirmesi önerilir.',
       },
     ],
   },

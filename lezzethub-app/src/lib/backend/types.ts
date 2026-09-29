@@ -76,6 +76,8 @@ export interface Backend {
   adminSetUserRole(userId: string, role: User['role']): Promise<void>;
   adminDeleteUser(userId: string): Promise<void>;
   adminResolveReport(reportId: string): Promise<void>;
+  /** Hijyen incelemesindeki ilanı temize çıkarıp yeniden yayına alır. */
+  adminReinstateListing(listingId: string): Promise<void>;
   adminReviewVerification(verificationId: string, approve: boolean, note: string): Promise<void>;
   /** Ödenmiş siparişi iptal edip tutarı karta iade eder. */
   adminRefundOrder(orderId: string, note: string): Promise<void>;

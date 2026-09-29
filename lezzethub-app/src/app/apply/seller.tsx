@@ -19,6 +19,7 @@ export default function SellerApplication() {
   const { run } = useFeedback();
   const [doc, setDoc] = useState<PickedDocument | null>(null);
   const [barcode, setBarcode] = useState('');
+  const [foodRegistrationNo, setFoodRegistrationNo] = useState('');
   const [iban, setIban] = useState('');
   const [ibanHolder, setIbanHolder] = useState(me?.name ?? '');
   const [declaration, setDeclaration] = useState(false);
@@ -52,6 +53,7 @@ export default function SellerApplication() {
           {current && (
             <View style={{ marginTop: 10 }}>
               <InfoRow icon="barcode-outline" label="e-Devlet doğrulama no" value={current.docNumber} />
+              <InfoRow icon="business-outline" label="Gıda işletmesi kayıt no" value={current.foodRegistrationNo} />
               <InfoRow icon="card-outline" label="Ödeme alınacak IBAN" value={current.iban ? `${formatIban(current.iban)} · ${current.ibanHolder}` : undefined} />
             </View>
           )}
@@ -73,6 +75,7 @@ export default function SellerApplication() {
           docUri: doc?.uri ?? '',
           docType: doc?.type ?? 'image',
           barcode,
+          foodRegistrationNo,
           iban,
           ibanHolder,
           acceptDeclaration: declaration,
@@ -90,7 +93,7 @@ export default function SellerApplication() {
         header={<Header title="Satıcı Başvurusu" subtitle="Satış yapmadan önce zorunlu adımlar" />}
         footer={
           <StickyFooter>
-            <Button title="Başvuruyu Gönder" icon="send-outline" onPress={submit} loading={saving} disabled={!doc || !declaration || !consent} />
+            <Button title="Başvuruyu Gönder" icon="send-outline" onPress={submit} loading={saving} disabled={!doc || !declaration || !consent || !foodRegistrationNo.trim()} />
           </StickyFooter>
         }
       >
@@ -102,7 +105,7 @@ export default function SellerApplication() {
         <Notice
           tone="teal"
           icon="shield-checkmark-outline"
-          text="Tüm satıcıların e-Devlet üzerinden doğrulanabilen hijyen eğitimi belgesi yüklemesi ve mevzuat beyanını onaylaması zorunludur. Belgen onaylanana kadar ilanların yayınlanmaz."
+          text="Tüm satıcıların e-Devlet üzerinden doğrulanabilen hijyen eğitimi belgesi yüklemesi, Tarım ve Orman Bakanlığı gıda işletmesi kayıt numarasını girmesi ve mevzuat beyanını onaylaması zorunludur. Belgen onaylanana kadar ilanların yayınlanmaz."
         />
         <View style={{ height: 14 }} />
         <DocumentUpload
@@ -123,6 +126,15 @@ export default function SellerApplication() {
             hint="Belgenin gerçekliği bu numarayla e-Devlet Belge Doğrulama üzerinden kontrol edilir."
           />
           <Field
+            label="Gıda işletmesi kayıt numarası *"
+            icon="business-outline"
+            value={foodRegistrationNo}
+            onChangeText={setFoodRegistrationNo}
+            placeholder="Ör. TR-34-K-012345"
+            autoCapitalize="characters"
+            hint="Evde satış için yaşadığın yerin İl/İlçe Tarım ve Orman Müdürlüğü’ne “gıda işletmesi kaydı” yaptırman gerekir. Numara ilanlarında alıcılara gösterilir."
+          />
+          <Field
             label="IBAN (kazancının aktarılacağı hesap) *"
             icon="card-outline"
             value={iban}
@@ -137,7 +149,7 @@ export default function SellerApplication() {
 
         <Text style={[font.h3, { marginTop: 18, marginBottom: 10 }]}>Zorunlu beyan ve onaylar</Text>
         <ConsentCheck checked={declaration} onChange={setDeclaration}>
-          <LegalLink doc="seller" label="Satıcı Beyanı ve Sorumluluk Taahhüdü" />’nü okudum. T.C. Sağlık Bakanlığı ve gıda mevzuatına ilişkin tüm risk ve koşulları kabul ediyor, sattığım ürünlerden doğacak tüm sonuçlardan bizzat sorumlu olduğumu beyan ediyorum.
+          <LegalLink doc="seller" label="Satıcı Beyanı ve Sorumluluk Taahhüdü" />’nü ve <LegalLink doc="food" label="Gıda Güvenliği Kuralları" />’nı okudum. T.C. Sağlık Bakanlığı ve gıda mevzuatına ilişkin tüm risk ve koşulları kabul ediyor, sattığım ürünlerden doğacak tüm sonuçlardan bizzat sorumlu olduğumu beyan ediyorum.
         </ConsentCheck>
         <ConsentCheck checked={consent} onChange={setConsent}>
           Hijyen belgemin ve IBAN bilgilerimin doğrulama ve ödeme amacıyla işlenmesine <LegalLink doc="consent" label="Açık Rıza Metni" /> kapsamında açık rıza veriyorum.

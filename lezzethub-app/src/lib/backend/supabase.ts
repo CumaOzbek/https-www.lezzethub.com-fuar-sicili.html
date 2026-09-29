@@ -45,6 +45,7 @@ function toUser(p: Row, priv?: Row): User {
     phone: str(priv?.phone),
     availability: str(p.availability),
     sellerStatus: vstatus(p.seller_status),
+    foodRegistrationNo: opt(p.food_registration_no),
     courierStatus: vstatus(p.courier_status),
     acceptedTermsAt: opt(priv?.accepted_terms_at),
     kvkkConsentAt: opt(priv?.kvkk_consent_at),
@@ -63,8 +64,13 @@ const toListing = (r: Row): Listing => ({
   prepTime: str(r.prep_time),
   delivery: (r.delivery as Listing['delivery']) ?? [],
   shippingPayer: r.shipping_payer === 'seller' ? 'seller' : 'buyer',
+  allergens: ((r.allergens as string[] | null) ?? []) as Listing['allergens'],
+  shelfLife: str(r.shelf_life),
+  shelfStable: !!r.shelf_stable,
+  safetyConfirmedAt: str(r.safety_confirmed_at),
   status: r.status === 'active' ? 'active' : 'passive',
   removedByAdmin: !!r.removed_by_admin,
+  underReview: !!r.under_review,
   province: str(r.province),
   district: str(r.district),
   neighborhood: str(r.neighborhood),
@@ -139,6 +145,7 @@ const toVerification = (r: Row): Verification => ({
   docType: r.doc_type === 'pdf' ? 'pdf' : 'image',
   docNumber: str(r.doc_number),
   licenseClass: r.license_class === 'A2' || r.license_class === 'B' ? r.license_class : undefined,
+  foodRegistrationNo: opt(r.food_registration_no),
   iban: opt(r.iban),
   ibanHolder: opt(r.iban_holder),
   declarationAt: opt(r.declaration_at),
@@ -533,6 +540,7 @@ export class SupabaseBackend implements Backend {
         p_doc_path: path,
         p_doc_type: input.docType,
         p_barcode: input.barcode,
+        p_food_registration_no: input.foodRegistrationNo,
         p_iban: input.iban,
         p_iban_holder: input.ibanHolder,
         p_accept_declaration: input.acceptDeclaration,
@@ -591,6 +599,11 @@ export class SupabaseBackend implements Backend {
         p_prep_time: input.prepTime,
         p_delivery: input.delivery,
         p_shipping_payer: input.shippingPayer,
+        p_allergens: input.allergens,
+        p_no_allergens: input.noAllergens,
+        p_shelf_life: input.shelfLife,
+        p_shelf_stable: input.shelfStable,
+        p_safety_confirmed: input.safetyConfirmed,
         p_status: input.status,
       }),
     );
@@ -710,6 +723,10 @@ export class SupabaseBackend implements Backend {
 
   async adminResolveReport(reportId: string) {
     await this.run(() => this.rpc('resolve_report', { p_report_id: reportId }));
+  }
+
+  async adminReinstateListing(listingId: string) {
+    await this.run(() => this.rpc('admin_reinstate_listing', { p_id: listingId }));
   }
 
   async adminReviewVerification(verificationId: string, approve: boolean, note: string) {

@@ -286,6 +286,11 @@ export class LocalBackend implements Backend {
     this.mutate((d) => api.resolveReport(d, me, reportId));
   }
 
+  async adminReinstateListing(listingId: string) {
+    const me = this.me();
+    this.mutate((d) => api.reinstateListing(d, me, listingId));
+  }
+
   async adminReviewVerification(verificationId: string, approve: boolean, note: string) {
     const me = this.me();
     this.mutate((d) => api.reviewVerification(d, me, verificationId, approve, note));

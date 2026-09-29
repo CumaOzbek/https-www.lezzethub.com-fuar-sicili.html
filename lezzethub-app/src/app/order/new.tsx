@@ -8,7 +8,7 @@ import { useFeedback } from '../../components/feedback';
 import { Button, Card, EmptyState, Field, Header, LocationBadge, Notice, Row, Screen, StickyFooter, Toggle } from '../../components/ui';
 import * as api from '../../lib/api';
 import { calcBreakdown } from '../../lib/commission';
-import { dateShort, dayLabel, hhmm, shippingPayerText, tl } from '../../lib/format';
+import { allergenShort, dateShort, dayLabel, hhmm, shippingPayerText, tl } from '../../lib/format';
 import { useStore } from '../../lib/store';
 import { colors, font, radius } from '../../lib/theme';
 import type { DeliveryMethod } from '../../lib/types';
@@ -119,6 +119,17 @@ export default function NewOrder() {
           </Row>
         </Card>
 
+        <View style={{ marginTop: 12 }}>
+          <Notice
+            tone={listing.allergens.length ? 'honey' : 'green'}
+            icon="warning-outline"
+            title={listing.allergens.length ? 'Alerjen uyarısı' : 'Alerjen içermez (satıcı beyanı)'}
+            text={
+              (listing.allergens.length ? `İçerir: ${listing.allergens.map(allergenShort).join(', ')}. ` : '') +
+              `Son tüketim / saklama: ${listing.shelfLife}. Alerjin varsa sipariş notunda satıcıya mutlaka belirt.`
+            }
+          />
+        </View>
         {otherProvince && (
           <View style={{ marginTop: 12 }}>
             <Notice
