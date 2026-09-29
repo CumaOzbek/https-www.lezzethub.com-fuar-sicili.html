@@ -73,7 +73,8 @@ export default function NewOrder() {
     );
   }
 
-  const b = calcBreakdown(listing.price, quantity);
+  const method = db.settings.paymentMode === 'online' ? 'online' : 'on_delivery';
+  const b = calcBreakdown(listing.price, quantity, method);
   const otherProvince = me.province !== listing.province;
   const otherDistrict = !otherProvince && me.district !== listing.district;
   const needsAddress = delivery !== 'pickup';
@@ -96,7 +97,7 @@ export default function NewOrder() {
           <StickyFooter>
             <Row gap={12}>
               <View>
-                <Text style={font.tiny}>Toplam</Text>
+                <Text style={font.tiny}>{method === 'online' ? 'Toplam' : 'Teslimatta ödenecek'}</Text>
                 <Text style={{ fontWeight: '900', fontSize: 19, color: colors.ink }}>{tl(b.buyerTotal)}</Text>
               </View>
               <Button title="Siparişi Gönder" icon="send" onPress={submit} loading={loading} style={{ flex: 1 }} disabled={!slot || !contract} />
@@ -232,9 +233,13 @@ export default function NewOrder() {
         <Field label="Satıcıya not (isteğe bağlı)" icon="chatbubble-ellipses-outline" value={note} onChangeText={setNote} placeholder="Ör. Fıstıklı olsun, zili çalmayın…" multiline maxLength={300} style={{ marginTop: 6 }} />
 
         <Text style={styles.section}>Hesap dökümü</Text>
-        <PriceBreakdown b={b} unitPrice={listing.price} quantity={quantity} perspective="buyer" />
+        <PriceBreakdown b={b} unitPrice={listing.price} quantity={quantity} perspective="buyer" method={method} />
         <Text style={[font.tiny, { marginTop: 8, lineHeight: 16, marginBottom: 14 }]}>
-          Şimdi ödeme alınmaz. Satıcı siparişi onayladığında “Online Öde” ile kartınla güvenli ödeme yaparsın (iyzico). Kart bilgilerin LezzetHub’da saklanmaz.
+          {method === 'online'
+            ? 'Şimdi ödeme alınmaz. Satıcı siparişi onayladığında “Online Öde” ile kartınla güvenli ödeme yaparsın (iyzico). Kart bilgilerin LezzetHub’da saklanmaz.'
+            : delivery === 'cargo'
+              ? 'Ödeme uygulama üzerinden alınmaz. Kargo siparişlerinde ödeme yöntemini (IBAN’a havale veya kapıda ödeme) satıcıyla mesajlaşarak belirlersin. Ürünü teslim almadan ödeme yapmamaya özen göster.'
+              : 'Ödeme uygulama üzerinden alınmaz. Ürünü teslim alırken ödemeyi doğrudan satıcıya (nakit veya IBAN) yaparsın.'}
         </Text>
         <ConsentCheck checked={contract} onChange={setContract}>
           <LegalLink doc="sales" label="Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi" />’ni okudum ve onaylıyorum. Ev yemeklerinde cayma hakkı bulunmadığını biliyorum.

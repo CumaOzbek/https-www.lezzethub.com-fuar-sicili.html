@@ -41,7 +41,7 @@ export default function ListingDetail() {
   const otherProvince = !!me && !isOwner && me.province !== listing.province;
   const otherDistrict = !!me && !isOwner && !otherProvince && me.district !== listing.district;
   const ships = listing.delivery.filter((d) => d !== 'pickup');
-  const buyerPrice = calcBreakdown(listing.price, 1).buyerTotal;
+  const buyerPrice = calcBreakdown(listing.price, 1, db.settings.paymentMode === 'online' ? 'online' : 'on_delivery').buyerTotal;
   const more = db.listings.filter((l) => l.ownerId === seller.id && l.id !== listing.id && l.status === 'active').slice(0, 3);
   const available = listing.status === 'active' && seller.active && !isBlocked;
   const completedSales = db.orders.filter((o) => o.sellerId === seller.id && o.status === 'completed').length;

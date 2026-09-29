@@ -77,7 +77,7 @@ export default function Chat() {
       />
       <View style={styles.statusBar}>
         <View style={{ alignSelf: 'center' }}>
-          <StatusBadge status={order.status} />
+          <StatusBadge status={order.status} method={order.paymentMethod} />
         </View>
       </View>
       <ScrollView

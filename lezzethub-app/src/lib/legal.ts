@@ -57,7 +57,7 @@ export const LEGAL_DOCS: Record<LegalKey, LegalDoc> = {
       {
         heading: '5. Aktarım ve saklama',
         body:
-          'Kart bilgileriniz uygulamaya girilmez; ödeme, lisanslı ödeme kuruluşu iyzico’nun güvenli ödeme sayfasında alınır ve kart verisi platformda saklanmaz. ' +
+          'Pilot dönemde ödemeler uygulama üzerinden alınmaz. Online ödeme açıldığında kart bilgileriniz uygulamaya girilmez; ödeme, lisanslı ödeme kuruluşu iyzico’nun güvenli ödeme sayfasında alınır ve kart verisi platformda saklanmaz. ' +
           'Veriler altyapı sağlayıcımızın (Supabase) sunucularında saklanır; bu sunucular yurt dışında bulunabilir ve aktarım KVKK m.9’a uygun olarak yapılır. ' +
           'Verileriniz üyelik süresince ve ilgili mevzuattaki saklama süreleri (ör. ticari kayıtlar için 10 yıl) boyunca tutulur; süre sonunda silinir, yok edilir veya anonim hale getirilir.',
       },
@@ -118,11 +118,12 @@ export const LEGAL_DOCS: Record<LegalKey, LegalDoc> = {
           'Kurye olarak listelenmek için geçerli A2 veya B sınıfı sürücü belgesinin yüklenmesi ve Kurye Beyanı’nın onaylanması zorunludur. Kuryeler LezzetHub’ın çalışanı değildir; teslimat ücreti ve koşulları kurye ile onu arayan kullanıcı arasında belirlenir.',
       },
       {
-        heading: '5. Sipariş, teslimat ve online ödeme',
+        heading: '5. Sipariş, teslimat ve ödeme',
         body:
-          'Siparişler randevuludur ve satıcının onayıyla ödeme aşamasına geçer. Ödeme, iyzico güvenli ödeme sayfası üzerinden kredi/banka kartıyla online alınır. ' +
-          'Teslimat elden, kurye veya kargo ile yapılır. Kurye/kargo ücretini ilanda belirtildiği gibi alıcı veya satıcı üstlenir; alıcı ödüyorsa bu ücret online ödemeye dahil değildir ve doğrudan kuryeye/kargo firmasına ödenir. ' +
-          'Alıcıdan ürün tutarının %10’u, satıcıdan %15’i hizmet bedeli olarak alınır. Satıcının net kazancı, sipariş tamamlandıktan sonra kayıtlı IBAN’ına aktarılır. İptal ve iadeler Mesafeli Satış Sözleşmesi’ndeki koşullara göre yapılır.',
+          'Siparişler randevuludur ve satıcının onayıyla kesinleşir. Siparişin ödeme yöntemi sipariş ekranında gösterilir:\n' +
+          '• Teslimatta ödeme (pilot dönem): Ödeme uygulama üzerinden alınmaz; alıcı ürün bedelini teslimatta doğrudan satıcıya (nakit veya IBAN) öder. LezzetHub ödemeye aracılık etmez, parayı tahsil etmez ve bu dönemde hizmet bedeli almaz. Ödemeye ilişkin uyuşmazlıklar taraflar arasındadır; LezzetHub şikayetleri inceleyip gerekli önlemleri (ilan kaldırma, hesap kapatma) alır.\n' +
+          '• Online ödeme (ileride): Ödeme, lisanslı ödeme kuruluşu iyzico’nun güvenli ödeme sayfasında kartla alınır; alıcıdan ürün tutarının %10’u, satıcıdan %15’i hizmet bedeli alınır ve satıcının net kazancı sipariş tamamlandıktan sonra IBAN’ına aktarılır. Online ödemeye geçiş en az 30 gün önce duyurulur.\n' +
+          'Teslimat elden, kurye veya kargo ile yapılır. Kurye/kargo ücretini ilanda belirtildiği gibi alıcı veya satıcı üstlenir. İptal ve iadeler Mesafeli Satış Sözleşmesi’ndeki koşullara göre yapılır.',
       },
       {
         heading: '6. Yasaklı ürünler ve hijyen şikayetleri',
@@ -216,7 +217,7 @@ export const LEGAL_DOCS: Record<LegalKey, LegalDoc> = {
       {
         heading: '2. Konu, fiyat ve ödeme',
         body:
-          'Sözleşmenin konusu, sipariş ekranında adı, adedi, birim fiyatı, alerjenleri, son tüketim/saklama bilgisi ve toplam tutarı gösterilen üründür. Tüm fiyatlara KDV dahildir. Toplam tutar; ürün bedeli ile %10 alıcı hizmet bedelinden oluşur ve iyzico güvenli ödeme sayfasında kartla ödenir. Kurye/kargo ücreti ilanda “alıcı öder” olarak belirtilmişse ödemeye dahil değildir.',
+          'Sözleşmenin konusu, sipariş ekranında adı, adedi, birim fiyatı, alerjenleri, son tüketim/saklama bilgisi ve toplam tutarı gösterilen üründür. Tüm fiyatlara KDV dahildir. Teslimatta ödemeli siparişlerde toplam tutar ürün bedelidir ve teslimatta doğrudan satıcıya ödenir. Online ödemeli siparişlerde toplam tutar; ürün bedeli ile %10 alıcı hizmet bedelinden oluşur ve iyzico güvenli ödeme sayfasında kartla ödenir. Kurye/kargo ücreti ilanda “alıcı öder” olarak belirtilmişse toplam tutara dahil değildir.',
       },
       {
         heading: '3. Teslimat',
@@ -231,7 +232,7 @@ export const LEGAL_DOCS: Record<LegalKey, LegalDoc> = {
       {
         heading: '5. İptal ve iade',
         body:
-          'Satıcı onayından önce ve ödemeden önce sipariş ücretsiz iptal edilebilir. Ödeme sonrası; ürünün hiç teslim edilmemesi, ayıplı, bozuk veya ilandan farklı olması halinde LezzetHub desteğine başvurabilirsiniz. Haklı bulunan taleplerde tutar, ödemenin yapıldığı karta iade edilir.',
+          'Satıcı onayından önce ve ödemeden önce sipariş ücretsiz iptal edilebilir. Ödeme sonrası; ürünün hiç teslim edilmemesi, ayıplı, bozuk veya ilandan farklı olması halinde LezzetHub desteğine başvurabilirsiniz. Online ödemeli siparişlerde haklı bulunan taleplerde tutar ödemenin yapıldığı karta iade edilir. Teslimatta ödemeli siparişlerde iade satıcı tarafından yapılır; LezzetHub uyuşmazlığın çözümüne yardımcı olur ve kurallara uymayan satıcının hesabını kapatabilir. Ürünü teslim almadan ödeme yapmamanızı öneririz.',
       },
       {
         heading: '6. Şikayet ve uyuşmazlık',

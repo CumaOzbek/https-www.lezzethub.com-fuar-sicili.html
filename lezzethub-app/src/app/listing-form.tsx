@@ -89,7 +89,8 @@ export default function ListingForm() {
   };
 
   const priceNum = Number(price.replace(',', '.'));
-  const preview = Number.isFinite(priceNum) && priceNum > 0 ? calcBreakdown(priceNum, 1) : null;
+  const pilot = db.settings.paymentMode !== 'online';
+  const preview = Number.isFinite(priceNum) && priceNum > 0 ? calcBreakdown(priceNum, 1, pilot ? 'on_delivery' : 'online') : null;
 
   const save = async () => {
     setSaving(true);
@@ -157,7 +158,7 @@ export default function ListingForm() {
             onChangeText={(t) => setPrice(t.replace(/[^0-9.,]/g, ''))}
             placeholder="0"
             keyboardType="decimal-pad"
-            hint={preview ? `Alıcı ${tl(preview.buyerTotal)} öder · Sana ${tl(preview.sellerNet)} kalır (porsiyon başı)` : 'Porsiyon / adet başı fiyat'}
+            hint={preview ? (pilot ? `Pilot dönem: komisyon yok, tutarın tamamı (${tl(preview.sellerNet)}) sana kalır` : `Alıcı ${tl(preview.buyerTotal)} öder · Sana ${tl(preview.sellerNet)} kalır (porsiyon başı)`) : 'Porsiyon / adet başı fiyat'}
           />
           <Text style={[font.small, { fontWeight: '700', color: colors.inkSoft, marginBottom: 8 }]}>Kategori</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>

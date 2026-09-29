@@ -8,11 +8,11 @@ import { useFeedback } from '../../components/feedback';
 import { Avatar, Badge, Button, Card, EmptyState, Field, Header, InfoRow, LocationBadge, Notice, Row, Screen, StatusBadge } from '../../components/ui';
 import * as api from '../../lib/api';
 import { calcBreakdown } from '../../lib/commission';
-import { DELIVERY_LABEL, ORDER_FLOW, STATUS_META, appointmentText, chatTime, shippingPayerText, tl } from '../../lib/format';
+import { DELIVERY_LABEL, STATUS_META, appointmentText, chatTime, orderFlow, shippingPayerText, tl } from '../../lib/format';
 import { useStore } from '../../lib/store';
 import { colors, font } from '../../lib/theme';
 
-const STEP_LABELS = ['Sipariş verildi', 'Satıcı onayladı', 'Ödendi', 'Tamamlandı'];
+const STEP_LABELS: Record<string, string> = { seller_pending: 'Sipariş verildi', approved: 'Satıcı onayladı', paid: 'Ödendi', completed: 'Tamamlandı' };
 
 const PAYMENT_STATUS: Record<string, { label: string; tone: 'green' | 'red' | 'yellow' | 'gray' }> = {
   pending: { label: 'Bekliyor', tone: 'yellow' },
@@ -58,9 +58,11 @@ export default function OrderDetail() {
   const actions = api.availableActions(order, me);
   const unread = db.messages.filter((m) => m.orderId === order.id && m.receiverId === me.id && !m.read).length;
   const closed = order.status === 'rejected' || order.status === 'cancelled';
-  const stepIdx = ORDER_FLOW.indexOf(order.status);
-  const lastGood = closed ? ORDER_FLOW.indexOf([...order.history].reverse().find((h) => ORDER_FLOW.includes(h.status))?.status ?? 'seller_pending') : stepIdx;
-  const b = calcBreakdown(order.unitPrice, order.quantity);
+  const onDelivery = order.paymentMethod === 'on_delivery';
+  const FLOW = orderFlow(order.paymentMethod);
+  const stepIdx = FLOW.indexOf(order.status);
+  const lastGood = closed ? FLOW.indexOf([...order.history].reverse().find((h) => FLOW.includes(h.status))?.status ?? 'seller_pending') : stepIdx;
+  const b = calcBreakdown(order.unitPrice, order.quantity, order.paymentMethod);
   const confirmedStage = ['approved', 'paid', 'completed'].includes(order.status);
   const payments = db.payments.filter((p) => p.orderId === order.id);
   const canPay = api.canPay(order, me);
@@ -94,11 +96,11 @@ export default function OrderDetail() {
     <Screen header={<Header title={`Sipariş ${order.code}`} subtitle={`${new Date(order.createdAt).toLocaleDateString('tr-TR')} tarihinde oluşturuldu`} />}>
       <Card>
         <Row style={{ justifyContent: 'space-between' }}>
-          <StatusBadge status={order.status} />
+          <StatusBadge status={order.status} method={order.paymentMethod} />
           <Text style={font.tiny}>{perspective === 'buyer' ? 'Alıcı olarak' : perspective === 'seller' ? 'Satıcı olarak' : 'Yönetici görünümü'}</Text>
         </Row>
         <View style={styles.steps}>
-          {ORDER_FLOW.map((s, i) => {
+          {FLOW.map((s, i) => {
             const done = i <= lastGood;
             const failedHere = closed && i === lastGood + 1;
             return (
@@ -109,10 +111,10 @@ export default function OrderDetail() {
                     {done && <Ionicons name="checkmark" size={12} color="#fff" />}
                     {failedHere && <Ionicons name="close" size={12} color="#fff" />}
                   </View>
-                  <View style={[styles.stepLine, { backgroundColor: i === ORDER_FLOW.length - 1 ? 'transparent' : i < lastGood ? colors.primary : colors.line }]} />
+                  <View style={[styles.stepLine, { backgroundColor: i === FLOW.length - 1 ? 'transparent' : i < lastGood ? colors.primary : colors.line }]} />
                 </View>
                 <Text style={[styles.stepText, done && { color: colors.ink }]} numberOfLines={2}>
-                  {STEP_LABELS[i]}
+                  {STEP_LABELS[s]}
                 </Text>
               </View>
             );
@@ -121,8 +123,22 @@ export default function OrderDetail() {
         {closed && (
           <Notice tone={order.status === 'rejected' ? 'red' : 'gray'} icon={order.status === 'rejected' ? 'close-circle-outline' : 'ban-outline'} title={STATUS_META[order.status].label} text={order.statusNote ?? ''} />
         )}
-        {order.status === 'approved' && isBuyer && <Notice tone="blue" icon="card-outline" text="Satıcı siparişini onayladı! Kartınla online ödeme yaparak siparişi kesinleştir." />}
-        {order.status === 'approved' && isSeller && <Notice tone="blue" icon="hourglass-outline" text="Alıcının online ödemesi bekleniyor. Ödeme alınmadan hazırlığa başlama." />}
+        {order.status === 'approved' && isBuyer && !onDelivery && <Notice tone="blue" icon="card-outline" text="Satıcı siparişini onayladı! Kartınla online ödeme yaparak siparişi kesinleştir." />}
+        {order.status === 'approved' && isSeller && !onDelivery && <Notice tone="blue" icon="hourglass-outline" text="Alıcının online ödemesi bekleniyor. Ödeme alınmadan hazırlığa başlama." />}
+        {order.status === 'approved' && isBuyer && onDelivery && (
+          <Notice
+            tone="green"
+            icon="cash-outline"
+            text={
+              order.delivery === 'cargo'
+                ? `Satıcı siparişini onayladı! Ödemeyi (${tl(order.buyerTotal)}) nasıl yapacağını satıcıyla mesajlaşarak belirle (IBAN veya kapıda ödeme). Ürünü teslim alınca “Tamamlandı” olarak işaretle.`
+                : `Satıcı siparişini onayladı! Ödemeyi (${tl(order.buyerTotal)}) teslimatta doğrudan satıcıya yaparsın (nakit veya IBAN). Teslim alınca “Tamamlandı” olarak işaretle.`
+            }
+          />
+        )}
+        {order.status === 'approved' && isSeller && onDelivery && (
+          <Notice tone="green" icon="cash-outline" text={`Siparişi hazırla. Ödemeyi (${tl(order.sellerNet)}) teslimatta alıcıdan doğrudan alırsın; teslim edince “Tamamlandı” olarak işaretle.`} />
+        )}
         {order.status === 'paid' && isSeller && <Notice tone="green" icon="checkmark-circle-outline" text="Ödeme alındı. Randevu saatine göre hazırlığa başlayabilirsin." />}
         {order.status === 'seller_pending' && isSeller && <Notice tone="yellow" icon="notifications-outline" text="Yeni sipariş talebi! Onaylamadan önce randevu saatine uygun olduğundan emin ol." />}
       </Card>
@@ -197,7 +213,7 @@ export default function OrderDetail() {
           <InfoRow
             icon="barcode-outline"
             label="Kargo takip"
-            value={order.trackingCode ? `${order.shippingCompany} · ${order.trackingCode}` : order.status === 'paid' ? 'Satıcı kargoya verdiğinde burada görünecek' : undefined}
+            value={order.trackingCode ? `${order.shippingCompany} · ${order.trackingCode}` : order.status === (onDelivery ? 'approved' : 'paid') ? 'Satıcı kargoya verdiğinde burada görünecek' : undefined}
           />
         )}
         {order.delivery === 'pickup' && (
@@ -224,7 +240,7 @@ export default function OrderDetail() {
         )}
       </Card>
 
-      {order.delivery === 'cargo' && isSeller && order.status === 'paid' && (
+      {order.delivery === 'cargo' && isSeller && order.status === (onDelivery ? 'approved' : 'paid') && (
         <Card style={{ marginTop: 14 }}>
           <Text style={[font.h3, { marginBottom: 4 }]}>📦 Kargo bilgisi</Text>
           <Text style={[font.small, { marginBottom: 12 }]}>
@@ -265,7 +281,7 @@ export default function OrderDetail() {
       )}
 
       <Text style={[font.h3, { marginTop: 20, marginBottom: 10 }]}>Hesap dökümü</Text>
-      <PriceBreakdown b={b} unitPrice={order.unitPrice} quantity={order.quantity} perspective={perspective} />
+      <PriceBreakdown b={b} unitPrice={order.unitPrice} quantity={order.quantity} perspective={perspective} method={order.paymentMethod} />
 
       <Text style={[font.h3, { marginTop: 20, marginBottom: 10 }]}>Sipariş geçmişi</Text>
       <Card>

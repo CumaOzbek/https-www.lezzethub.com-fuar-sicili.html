@@ -90,6 +90,7 @@ const toOrder = (r: Row): Order => ({
   appointment: str(r.appointment),
   delivery: r.delivery === 'courier' || r.delivery === 'cargo' ? r.delivery : 'pickup',
   shippingPayer: r.shipping_payer === 'seller' ? 'seller' : 'buyer',
+  paymentMethod: r.payment_method === 'online' ? 'online' : 'on_delivery',
   address: str(r.address),
   pickupAddress: opt(r.pickup_address),
   shippingCompany: opt(r.shipping_company),
@@ -214,7 +215,7 @@ function dbError(e: PostgrestError): never {
 }
 
 const emptyDb = (): DB => ({
-  version: DB_VERSION, users: [], listings: [], orders: [], messages: [], payments: [], notifications: [], reports: [], blocks: [], verifications: [], couriers: [],
+  version: DB_VERSION, settings: { paymentMode: 'offline' }, users: [], listings: [], orders: [], messages: [], payments: [], notifications: [], reports: [], blocks: [], verifications: [], couriers: [],
 });
 
 /** Edge Function hatasındaki kullanıcıya yönelik mesajı çıkarır. */
@@ -323,7 +324,8 @@ export class SupabaseBackend implements Backend {
       const from = (table: string) => this.sb.from(table).select('*');
       const newestFirst = { ascending: false };
       const none = Promise.resolve({ data: [] as Row[], error: null });
-      const [profiles, priv, listings, orders, messages, payments, notifications, reports, blocks, verifications, couriers] = await Promise.all([
+      const [settings, profiles, priv, listings, orders, messages, payments, notifications, reports, blocks, verifications, couriers] = await Promise.all([
+        from('app_settings'),
         from('profiles'),
         signedIn ? from('profile_private') : none,
         from('listings').order('created_at', newestFirst),
@@ -336,12 +338,14 @@ export class SupabaseBackend implements Backend {
         signedIn ? from('verifications').order('submitted_at', newestFirst) : none,
         signedIn ? from('courier_profiles') : none,
       ]);
-      for (const r of [profiles, priv, listings, orders, messages, payments, notifications, reports, blocks, verifications, couriers]) {
+      for (const r of [settings, profiles, priv, listings, orders, messages, payments, notifications, reports, blocks, verifications, couriers]) {
         if (r.error) dbError(r.error);
       }
       const privById = new Map((priv.data ?? []).map((p) => [str(p.id), p]));
+      const setting = (key: string) => (settings.data ?? []).find((s) => s.key === key)?.value;
       this.db = {
         version: DB_VERSION,
+        settings: { paymentMode: setting('payment_mode') === 'online' ? 'online' : 'offline' },
         users: (profiles.data ?? []).map((p) => toUser(p, privById.get(str(p.id)))),
         listings: (listings.data ?? []).map(toListing),
         orders: (orders.data ?? []).map(toOrder),

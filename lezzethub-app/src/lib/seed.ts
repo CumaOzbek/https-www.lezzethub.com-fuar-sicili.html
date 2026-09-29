@@ -1,11 +1,11 @@
 // İlk açılışta yüklenen örnek veriler (demo hesaplar, Türkiye genelinden ilanlar, örnek siparişler).
 // Tüm kişiler, telefonlar, IBAN'lar ve belgeler uydurmadır.
-import { createOrder, markPayout, orderAction, payWithTestCard, reportContent, saveListing, sendMessage, setShipment } from './api';
+import { createOrder, orderAction, reportContent, saveListing, sendMessage, setShipment } from './api';
 import type { ListingInput } from './api';
 import { SAMPLE_HYGIENE_DOC, SAMPLE_LICENSE_DOC } from './sample-docs';
 import type { CourierProfile, DB, User, Verification } from './types';
 
-export const DB_VERSION = 4;
+export const DB_VERSION = 5;
 
 export const DEMO_ACCOUNTS = [
   { label: 'Admin', email: 'admin@lezzethub.com', password: 'admin123', hint: 'Yönetici paneli' },
@@ -179,7 +179,7 @@ const COURIERS: Omit<CourierProfile, 'updatedAt'>[] = [
 
 export async function createSeed(hash: (password: string) => Promise<string>): Promise<DB> {
   const db: DB = {
-    version: DB_VERSION, users: [], listings: [], orders: [], messages: [], payments: [], notifications: [], reports: [], blocks: [], verifications: [], couriers: [],
+    version: DB_VERSION, settings: { paymentMode: 'offline' }, users: [], listings: [], orders: [], messages: [], payments: [], notifications: [], reports: [], blocks: [], verifications: [], couriers: [],
   };
   const created = new Date(Date.now() - 1000 * 60 * 60 * 24 * 20).toISOString();
   for (const { password, ...u } of USERS) {
@@ -222,39 +222,35 @@ export async function createSeed(hash: (password: string) => Promise<string>): P
   }
 
   const U = (id: string) => db.users.find((u) => u.id === id)!;
-  const admin = U('u-admin');
   const at = (days: number, hour: number) => {
     const d = new Date();
     d.setDate(d.getDate() + days);
     d.setHours(hour, 0, 0, 0);
     return d.toISOString();
   };
-  const card = { holder: 'DEMO ALICI', number: TEST_CARDS.success, expiry: '12/30', cvc: '123' };
+  // Demo verisi pilot moddadır: ödemeler teslimatta doğrudan satıcıya yapılır, komisyon alınmaz.
 
-  // 1) Tamamlanmış, satıcıya ödemesi bekleyen sipariş (Mehmet → Fatma, oruk, kurye)
+  // 1) Tamamlanmış sipariş (Mehmet → Fatma, oruk, kurye)
   const o1 = createOrder(db, 'u-mehmet', { listingId: ids[3]!, quantity: 1, appointment: at(1, 19), delivery: 'courier', address: U('u-mehmet').address, note: '' });
   orderAction(db, U('u-fatma'), o1.id, 'approve');
-  payWithTestCard(db, 'u-mehmet', o1.id, card);
   orderAction(db, U('u-mehmet'), o1.id, 'complete');
   sendMessage(db, 'u-fatma', o1.id, 'Afiyet olsun Mehmet Bey, tekrar bekleriz 🙏');
 
-  // 2) Tamamlanmış ve satıcıya ödenmiş sipariş (Mehmet → Hatice, mercimek çorbası)
+  // 2) Tamamlanmış sipariş (Mehmet → Hatice, mercimek çorbası)
   const o2 = createOrder(db, 'u-mehmet', { listingId: ids[6]!, quantity: 2, appointment: at(1, 13), delivery: 'courier', address: U('u-mehmet').address, note: '' });
   orderAction(db, U('u-hatice'), o2.id, 'approve');
-  payWithTestCard(db, 'u-mehmet', o2.id, card);
   orderAction(db, U('u-hatice'), o2.id, 'complete');
-  markPayout(db, admin, [o2.id]);
 
   // 3) Kargoya verilmiş sipariş (Deniz/İzmir → Serkan/Ankara, baklava, kargo satıcıdan)
   const o3 = createOrder(db, 'u-deniz', { listingId: ids[10]!, quantity: 1, appointment: at(3, 12), delivery: 'cargo', address: U('u-deniz').address, note: 'Hediye paketi olursa sevinirim.' });
   orderAction(db, U('u-serkan'), o3.id, 'approve');
-  payWithTestCard(db, 'u-deniz', o3.id, card);
+  sendMessage(db, 'u-serkan', o3.id, 'Merhaba Deniz Hanım, ödemeyi IBAN’a havale ile yapabilirsiniz; bilgileri buradan iletiyorum.');
   setShipment(db, U('u-serkan'), o3.id, 'Yurtiçi Kargo', 'YK1234567890');
 
-  // 4) Ödeme bekleyen sipariş (Hatice → Ayşe, haytalı, kurye satıcıdan)
+  // 4) Onaylanmış, teslim bekleyen sipariş (Hatice → Ayşe, haytalı, kurye satıcıdan)
   const o4 = createOrder(db, 'u-hatice', { listingId: ids[2]!, quantity: 4, appointment: at(2, 15), delivery: 'courier', address: U('u-hatice').address, note: 'Farklı ilçedeyim, kurye için yazışalım.' });
   orderAction(db, U('u-ayse'), o4.id, 'approve');
-  sendMessage(db, 'u-ayse', o4.id, 'Merhaba Hatice Hanım, onayladım. Kurye ücreti bizden 🙂');
+  sendMessage(db, 'u-ayse', o4.id, 'Merhaba Hatice Hanım, onayladım. Kurye ücreti bizden, ödemeyi teslimatta yaparsınız 🙂');
 
   // 5) Satıcı onayı bekleyen sipariş (Mehmet → Ayşe, künefe)
   createOrder(db, 'u-mehmet', { listingId: ids[0]!, quantity: 2, appointment: at(3, 20), delivery: 'pickup', address: '', note: 'Fıstıklı olsun lütfen 🙏' });

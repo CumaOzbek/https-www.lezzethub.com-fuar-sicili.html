@@ -61,6 +61,16 @@ export default function AdminPayments() {
         ]}
       />
       <View style={{ height: 14 }} />
+      {db.settings.paymentMode === 'offline' && (
+        <View style={{ marginBottom: 12 }}>
+          <Notice
+            tone="green"
+            icon="leaf-outline"
+            title="Pilot mod"
+            text="Yeni siparişlerde ödeme teslimatta doğrudan satıcıya yapılır; bu ekranda yalnızca online ödemeli (eski veya ileride açılacak) siparişler görünür."
+          />
+        </View>
+      )}
 
       {tab === 'payouts' && (
         <>

@@ -2,7 +2,7 @@
 // Cihaz içi (demo) modda doğrudan kullanılır; canlı modda aynı kurallar Supabase'deki
 // sunucu fonksiyonlarında (supabase/schema.sql) uygulanır. Arayüz availableActions'ı her iki modda da kullanır.
 import { calcBreakdown } from './commission';
-import { DELIVERY_LABEL, STATUS_META, appointmentText, tl } from './format';
+import { DELIVERY_LABEL, appointmentText, statusLabel, tl } from './format';
 import { isValidDistrict, isValidProvince } from './locations';
 import {
   ALLERGENS,
@@ -548,7 +548,8 @@ export function createOrder(db: DB, buyerId: string, input: OrderInput): Order {
     fail(input.delivery === 'cargo' ? 'Kargo için açık adresini (mahalle, sokak, no, ilçe/il) girin.' : 'Kurye teslimatı için adres girin.');
   }
 
-  const b = calcBreakdown(listing.price, input.quantity);
+  const paymentMethod = db.settings.paymentMode === 'online' ? 'online' : 'on_delivery';
+  const b = calcBreakdown(listing.price, input.quantity, paymentMethod);
   const t = now();
   const order: Order = {
     id: uid(),
@@ -562,6 +563,7 @@ export function createOrder(db: DB, buyerId: string, input: OrderInput): Order {
     appointment: input.appointment,
     delivery: input.delivery,
     shippingPayer: listing.shippingPayer,
+    paymentMethod,
     address: input.delivery === 'pickup' ? '' : input.address.trim(),
     note: input.note.trim(),
     subtotal: b.subtotal,
@@ -593,7 +595,8 @@ export type OrderAction = 'approve' | 'reject' | 'cancel' | 'complete' | 'refund
 
 /**
  * Kullanıcının bu sipariş üzerinde yapabileceği işlemler.
- * Ödeme ayrı bir akıştır (canPay): alıcı "approved" durumunda online öder.
+ * Online ödemede ödeme ayrı bir akıştır (canPay): alıcı "approved" durumunda öder.
+ * Teslimatta ödemede "approved" durumundan doğrudan "completed"a geçilir.
  */
 export function availableActions(order: Order, user: User): OrderAction[] {
   const isBuyer = order.buyerId === user.id;
@@ -606,6 +609,7 @@ export function availableActions(order: Order, user: User): OrderAction[] {
       if (isBuyer) a.push('cancel');
       break;
     case 'approved':
+      if ((isBuyer || isSeller) && order.paymentMethod === 'on_delivery') a.push('complete');
       if (isBuyer || isSeller) a.push('cancel');
       break;
     case 'paid':
@@ -616,14 +620,15 @@ export function availableActions(order: Order, user: User): OrderAction[] {
   return a;
 }
 
-export const canPay = (order: Order, user: User | null | undefined) => !!user && order.status === 'approved' && order.buyerId === user.id;
+export const canPay = (order: Order, user: User | null | undefined) =>
+  !!user && order.paymentMethod === 'online' && order.status === 'approved' && order.buyerId === user.id;
 
 function transition(db: DB, order: Order, to: OrderStatus, by: string, note?: string) {
   order.status = to;
   order.statusNote = note;
   order.updatedAt = now();
   order.history.push({ status: to, at: order.updatedAt, by, note });
-  systemMessage(db, order, `Sipariş durumu: ${STATUS_META[to].label}${note ? ` — ${note}` : ''}`);
+  systemMessage(db, order, `Sipariş durumu: ${statusLabel(to, order.paymentMethod)}${note ? ` — ${note}` : ''}`);
 }
 
 export function orderAction(db: DB, actor: User, orderId: string, action: OrderAction, note?: string) {
@@ -635,7 +640,15 @@ export function orderAction(db: DB, actor: User, orderId: string, action: OrderA
     case 'approve':
       if (order.delivery === 'pickup') order.pickupAddress = actor.address || `${actor.neighborhood}, ${actor.district}/${actor.province}`;
       transition(db, order, 'approved', actor.id);
-      notify(db, order.buyerId, 'Siparişin onaylandı ✅', `${title} satıcı tarafından onaylandı. Online ödemeyi yaparak siparişini kesinleştir.`, order.id);
+      notify(
+        db,
+        order.buyerId,
+        'Siparişin onaylandı ✅',
+        order.paymentMethod === 'online'
+          ? `${title} satıcı tarafından onaylandı. Online ödemeyi yaparak siparişini kesinleştir.`
+          : `${title} satıcı tarafından onaylandı. Ödemeyi teslimatta doğrudan satıcıya yapacaksın (${tl(order.buyerTotal)}).`,
+        order.id,
+      );
       break;
     case 'reject':
       transition(db, order, 'rejected', actor.id, note || 'Satıcı siparişi reddetti');
@@ -670,7 +683,8 @@ export function setShipment(db: DB, actor: User, orderId: string, company: strin
   const order = getOrder(db, orderId) ?? fail('Sipariş bulunamadı.');
   if (order.sellerId !== actor.id) fail('Kargo bilgisini yalnızca satıcı girebilir.');
   if (order.delivery !== 'cargo') fail('Bu sipariş kargo ile gönderilmiyor.');
-  if (order.status !== 'paid') fail('Kargo bilgisi ödeme alındıktan sonra girilebilir.');
+  const ready = order.paymentMethod === 'online' ? order.status === 'paid' : order.status === 'approved';
+  if (!ready) fail(order.paymentMethod === 'online' ? 'Kargo bilgisi ödeme alındıktan sonra girilebilir.' : 'Kargo bilgisi sipariş onaylandıktan sonra girilebilir.');
   if (company.trim().length < 2 || trackingCode.trim().length < 4) fail('Kargo firmasını ve takip numarasını girin.');
   order.shippingCompany = company.trim();
   order.trackingCode = trackingCode.trim();
@@ -743,6 +757,7 @@ export function markPayout(db: DB, actor: User, orderIds: string[]) {
   const t = now();
   for (const id of orderIds) {
     const o = getOrder(db, id) ?? fail('Sipariş bulunamadı.');
+    if (o.paymentMethod !== 'online') fail('Teslimatta ödenen siparişlerde satıcıya aktarım yapılmaz; ödemeyi alıcı doğrudan satıcıya yapar.');
     if (o.status !== 'completed') fail('Yalnızca tamamlanan siparişler için satıcıya ödeme yapılır.');
     if (o.payoutStatus === 'paid') continue;
     o.payoutStatus = 'paid';
@@ -890,9 +905,11 @@ export function deleteUser(db: DB, actor: User, userId: string) {
 }
 
 export function adminStats(db: DB) {
-  const counted = db.orders.filter((o) => o.status === 'paid' || o.status === 'completed');
+  // İşlem hacmi: online ödenmiş/tamamlanmış + teslimatta ödenip tamamlanmış siparişler. Komisyon yalnızca online siparişlerden.
+  const volume = db.orders.filter((o) => (o.paymentMethod === 'online' ? o.status === 'paid' || o.status === 'completed' : o.status === 'completed'));
+  const counted = volume.filter((o) => o.paymentMethod === 'online');
   const sum = (list: Order[], f: (o: Order) => number) => Math.round(list.reduce((s, o) => s + f(o), 0) * 100) / 100;
-  const payoutDue = db.orders.filter((o) => o.status === 'completed' && o.payoutStatus === 'pending');
+  const payoutDue = db.orders.filter((o) => o.paymentMethod === 'online' && o.status === 'completed' && o.payoutStatus === 'pending');
   return {
     users: db.users.length,
     activeUsers: db.users.filter((u) => u.active).length,
@@ -904,7 +921,8 @@ export function adminStats(db: DB) {
     completedOrders: db.orders.filter((o) => o.status === 'completed').length,
     pendingVerifications: db.verifications.filter((v) => v.status === 'pending').length,
     openReports: db.reports.filter((r) => r.status === 'open').length,
-    grossVolume: sum(counted, (o) => o.buyerTotal),
+    paymentMode: db.settings.paymentMode,
+    grossVolume: sum(volume, (o) => o.buyerTotal),
     commission: sum(counted, (o) => o.buyerFee + o.sellerFee),
     buyerFees: sum(counted, (o) => o.buyerFee),
     sellerFees: sum(counted, (o) => o.sellerFee),
@@ -917,7 +935,7 @@ export function adminStats(db: DB) {
 export function payoutSummary(db: DB) {
   const bySeller = new Map<string, { sellerId: string; orders: Order[]; total: number }>();
   for (const o of db.orders) {
-    if (o.status !== 'completed' || o.payoutStatus !== 'pending') continue;
+    if (o.paymentMethod !== 'online' || o.status !== 'completed' || o.payoutStatus !== 'pending') continue;
     const e = bySeller.get(o.sellerId) ?? { sellerId: o.sellerId, orders: [], total: 0 };
     e.orders.push(o);
     e.total = Math.round((e.total + o.sellerNet) * 100) / 100;

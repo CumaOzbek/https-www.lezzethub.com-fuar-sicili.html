@@ -1,4 +1,4 @@
-import { ALLERGENS, type AllergenKey, type DeliveryMethod, type LicenseClass, type OrderStatus, type ShippingPayer, type VerificationStatus } from './types';
+import { ALLERGENS, type AllergenKey, type DeliveryMethod, type PaymentMethod, type LicenseClass, type OrderStatus, type ShippingPayer, type VerificationStatus } from './types';
 
 export function tl(n: number) {
   return (
@@ -90,6 +90,16 @@ export const STATUS_META: Record<OrderStatus, { label: string; tone: 'yellow' | 
 };
 
 export const ORDER_FLOW: OrderStatus[] = ['seller_pending', 'approved', 'paid', 'completed'];
+
+/** Teslimatta ödemeli siparişlerde "ödendi" adımı yoktur. */
+export const orderFlow = (method: PaymentMethod): OrderStatus[] =>
+  method === 'on_delivery' ? ['seller_pending', 'approved', 'completed'] : ORDER_FLOW;
+
+/** Sipariş durumunun ödeme yöntemine göre adı. */
+export function statusLabel(status: OrderStatus, method: PaymentMethod = 'online') {
+  if (status === 'approved' && method === 'on_delivery') return 'Onaylandı · Teslimatta ödeme';
+  return STATUS_META[status].label;
+}
 
 export function initials(name: string) {
   return name

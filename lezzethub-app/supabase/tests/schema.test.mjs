@@ -21,6 +21,9 @@ await db.exec(`
 `);
 try { await db.exec(read('locations.sql')); await db.exec(read('schema.sql')); } catch (e) { console.log('SCHEMA ERROR:', e.message); process.exit(1); }
 ok(true, 'schema loaded');
+ok((await db.query(`select _payment_mode() m`)).rows[0].m === 'offline', 'default payment mode is offline (pilot)');
+// Aşağıdaki akış testleri online ödeme modunda çalışır; pilot mod ayrıca test edilir.
+await db.exec(`update app_settings set value = 'online' where key = 'payment_mode'`);
 ok((await db.query(`select count(*)::int n from tr_districts`)).rows[0].n === 973, '973 districts loaded');
 
 // Kullanıcı oluştur (Supabase Auth kaydını taklit eder)
@@ -346,6 +349,32 @@ await rpcFails(`select create_order($1, 1, $2, 'pickup', '', '', 'x')`, [kunefe.
 await q(`select unblock_user($1)`, [ayse]);
 await q(`select send_message($1, 'tekrar merhaba')`, [o.id]);
 ok(true, 'unblock allows messaging');
+
+// Pilot mod (teslimatta ödeme): komisyonsuz, ödeme adımı yok, onaydan doğrudan tamamlandıya.
+await su(); await db.exec(`update app_settings set value = 'offline' where key = 'payment_mode'`);
+await as(null);
+ok((await q(`select value from app_settings where key = 'payment_mode'`))[0].value === 'offline', 'anon can read payment mode');
+await rpcFails(`update app_settings set value = 'online'`, [], 'permission denied', 'client cannot change payment mode');
+await as(mehmet);
+const po = (await q(`select * from create_order($1, 2, $2, 'cargo', 'Cumhuriyet Mah. 5. Sok. No:1 Antakya', '', 'x')`, [kunefe.id, future]))[0];
+ok(po.payment_method === 'on_delivery' && Number(po.buyer_fee) === 0 && Number(po.seller_fee) === 0 && Number(po.buyer_total) === 360 && Number(po.seller_net) === 360, 'pilot order has no fees');
+await as(ayse);
+await q(`select order_action($1, 'approve')`, [po.id]);
+await as(mehmet);
+ok((await q(`select body from notifications where user_id = $1 and order_id = $2 and title like 'Siparişin onaylandı%'`, [mehmet, po.id]))[0].body.includes('teslimatta'), 'buyer told to pay on delivery');
+ok((await q(`select text from messages where order_id = $1 and is_system order by created_at desc limit 1`, [po.id]))[0].text.includes('Teslimatta ödeme'), 'system message shows on-delivery label');
+await service();
+await rpcFails(`select payment_prepare($1, $2)`, [po.id, mehmet], 'teslimatta', 'no online payment for on-delivery order');
+await as(ayse);
+await q(`select set_shipment($1, 'Aras Kargo', 'AR998877')`, [po.id]);
+ok((await q(`select tracking_code from orders where id = $1`, [po.id]))[0].tracking_code === 'AR998877', 'shipment allowed after approval in pilot');
+await as(mehmet);
+await q(`select order_action($1, 'complete')`, [po.id]);
+r = await q(`select status, history from orders where id = $1`, [po.id]);
+ok(r[0].status === 'completed' && r[0].history.map((h) => h.status).join(',') === 'seller_pending,approved,completed', 'pilot flow completes without payment');
+await as(admin);
+await rpcFails(`select admin_mark_payout(array[$1::uuid])`, [po.id], 'aktarım yapılmaz', 'no payout for on-delivery order');
+await su(); await db.exec(`update app_settings set value = 'online' where key = 'payment_mode'`);
 
 // Hijyen şikayeti: ürünü satın almış alıcıdan tek şikayet → ilan otomatik incelemeye alınır.
 await as(mehmet);

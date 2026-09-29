@@ -10,7 +10,7 @@ import { ALL_DISTRICTS, ALL_TURKEY, PROVINCES, districtsOf, matchesText, suggest
 import type { LegalKey } from '../lib/legal';
 import { useStore } from '../lib/store';
 import { colors, font, radius, shadowSoft } from '../lib/theme';
-import { CATEGORIES, type DeliveryMethod, type Listing, type Order, type User } from '../lib/types';
+import { CATEGORIES, type DeliveryMethod, type Listing, type Order, type PaymentMethod, type User } from '../lib/types';
 import { Avatar, Badge, Card, EmptyState, Field, LocationBadge, Row, StatusBadge, type IconName } from './ui';
 
 export const categoryOf = (key: string) => CATEGORIES.find((c) => c.key === key) ?? CATEGORIES[CATEGORIES.length - 1]!;
@@ -406,13 +406,37 @@ export function LocationFields({
 
 /* ------------------------------ Hesap dökümü ------------------------------ */
 
-export function PriceBreakdown({ b, unitPrice, quantity, perspective }: { b: Breakdown; unitPrice: number; quantity: number; perspective: 'buyer' | 'seller' | 'admin' }) {
+export function PriceBreakdown({
+  b,
+  unitPrice,
+  quantity,
+  perspective,
+  method = 'online',
+}: {
+  b: Breakdown;
+  unitPrice: number;
+  quantity: number;
+  perspective: 'buyer' | 'seller' | 'admin';
+  method?: PaymentMethod;
+}) {
   const line = (label: string, value: string, opts: { strong?: boolean; muted?: boolean; color?: string } = {}) => (
     <View style={styles.bLine} key={label}>
-      <Text style={[{ color: opts.muted ? colors.muted : colors.inkSoft, fontSize: 14 }, opts.strong && { fontWeight: '800', color: colors.ink, fontSize: 16 }]}>{label}</Text>
+      <Text style={[{ color: opts.muted ? colors.muted : colors.inkSoft, fontSize: 14, flexShrink: 1 }, opts.strong && { fontWeight: '800', color: colors.ink, fontSize: 16 }]}>{label}</Text>
       <Text style={[{ color: opts.color ?? colors.ink, fontSize: 14, fontWeight: '600' }, opts.strong && { fontWeight: '900', fontSize: 17, color: opts.color ?? colors.primaryDark }]}>{value}</Text>
     </View>
   );
+  if (method === 'on_delivery') {
+    // Pilot mod: para platformdan geçmez, hizmet bedeli yoktur.
+    return (
+      <View style={styles.breakdown}>
+        {line(`Ürün tutarı (${quantity} × ${tl(unitPrice)})`, tl(b.subtotal))}
+        {line('Hizmet bedeli', 'Pilot dönemde ücretsiz', { muted: true, color: colors.success })}
+        <View style={styles.bDivider} />
+        {line(perspective === 'seller' ? 'Teslimatta alacağın tutar' : 'Teslimatta satıcıya ödenecek', tl(b.buyerTotal), { strong: true })}
+        <Text style={[font.tiny, { marginTop: 6, lineHeight: 16 }]}>Ödeme uygulama üzerinden alınmaz; alıcı teslimatta satıcıya nakit veya IBAN ile öder.</Text>
+      </View>
+    );
+  }
   return (
     <View style={styles.breakdown}>
       {line(`Ürün tutarı (${quantity} × ${tl(unitPrice)})`, tl(b.subtotal))}
@@ -475,7 +499,7 @@ export function OrderCard({ order, perspective }: { order: Order; perspective: '
         </View>
       </Row>
       <Row style={styles.orderFooter}>
-        <StatusBadge status={order.status} />
+        <StatusBadge status={order.status} method={order.paymentMethod} />
         <Text style={{ fontWeight: '900', color: colors.primaryDark, fontSize: 15 }}>
           {tl(perspective === 'seller' ? order.sellerNet : order.buyerTotal)}
         </Text>

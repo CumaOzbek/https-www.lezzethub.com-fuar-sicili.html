@@ -66,6 +66,20 @@ export default function AdminStats() {
         </Card>
       )}
 
+      {s.paymentMode === 'offline' && (
+        <Card style={{ marginTop: 12, backgroundColor: colors.successBg }}>
+          <Row gap={10} style={{ alignItems: 'flex-start' }}>
+            <Text style={{ fontSize: 22 }}>🌱</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[font.h3, { color: colors.success }]}>Pilot mod: teslimatta ödeme</Text>
+              <Text style={[font.small, { marginTop: 2, lineHeight: 18 }]}>
+                Ödemeler uygulamadan geçmez; alıcı satıcıya teslimatta öder ve komisyon alınmaz. Şirket ve iyzico hazır olunca online ödemeye geçilir (README → “Online ödemeye geçiş”).
+              </Text>
+            </View>
+          </Row>
+        </Card>
+      )}
+
       <Card style={{ marginTop: 12, backgroundColor: colors.ink }}>
         <Text style={{ color: colors.peach, fontWeight: '700', fontSize: 13 }}>Toplam komisyon geliri</Text>
         <Text style={{ color: '#fff', fontSize: 30, fontWeight: '900', marginTop: 4 }}>{tl(s.commission)}</Text>
@@ -123,7 +137,7 @@ export default function AdminStats() {
             <Text style={{ fontWeight: '900', color: colors.primaryDark }}>{tl(o.buyerTotal)}</Text>
           </Row>
           <View style={{ marginTop: 8 }}>
-            <StatusBadge status={o.status} />
+            <StatusBadge status={o.status} method={o.paymentMethod} />
           </View>
         </Card>
       ))}

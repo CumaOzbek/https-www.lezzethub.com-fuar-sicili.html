@@ -68,7 +68,7 @@ export default function Pay() {
     );
   }
 
-  const b = calcBreakdown(order.unitPrice, order.quantity);
+  const b = calcBreakdown(order.unitPrice, order.quantity, order.paymentMethod);
 
   const payTest = async () => {
     setPaying(true);

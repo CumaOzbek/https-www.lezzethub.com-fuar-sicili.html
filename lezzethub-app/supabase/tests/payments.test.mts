@@ -82,6 +82,7 @@ await db.exec(`
 `);
 await db.exec(fs.readFileSync(path.join(DIR, 'locations.sql'), 'utf8'));
 await db.exec(fs.readFileSync(path.join(DIR, 'schema.sql'), 'utf8'));
+await db.exec(`update app_settings set value = 'online' where key = 'payment_mode'`);
 
 const q = async (sql: string, params: unknown[] = []) => (await db.query<any>(sql, params)).rows;
 const as = async (id: string) => { await db.exec('reset role'); await db.query(`select set_config('request.jwt.claim.sub', $1, false)`, [id]); await db.exec('set role authenticated'); };

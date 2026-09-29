@@ -17,9 +17,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { STATUS_META, initials } from '../lib/format';
+import { STATUS_META, initials, statusLabel } from '../lib/format';
 import { colors, font, noOutline, radius, shadow, shadowSoft } from '../lib/theme';
-import type { OrderStatus } from '../lib/types';
+import type { OrderStatus, PaymentMethod } from '../lib/types';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -363,8 +363,9 @@ export function Badge({ label, tone = 'orange', icon }: { label: string; tone?: 
   );
 }
 
-export function StatusBadge({ status }: { status: OrderStatus }) {
+export function StatusBadge({ status, method = 'online' }: { status: OrderStatus; method?: PaymentMethod }) {
   const m = STATUS_META[status];
+  const onDelivery = method === 'on_delivery' && status === 'approved';
   const icon: Record<OrderStatus, IconName> = {
     seller_pending: 'time-outline',
     approved: 'card-outline',
@@ -373,7 +374,7 @@ export function StatusBadge({ status }: { status: OrderStatus }) {
     rejected: 'close-circle-outline',
     cancelled: 'ban-outline',
   };
-  return <Badge label={m.label} tone={m.tone} icon={icon[status]} />;
+  return <Badge label={statusLabel(status, method)} tone={onDelivery ? 'green' : m.tone} icon={onDelivery ? 'thumbs-up-outline' : icon[status]} />;
 }
 
 export function LocationBadge({ province, district, neighborhood, compact }: { province?: string; district: string; neighborhood: string; compact?: boolean }) {

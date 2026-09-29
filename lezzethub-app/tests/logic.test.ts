@@ -62,6 +62,8 @@ const reg = (over: Partial<api.RegisterInput> = {}): api.RegisterInput => ({
   /* Komisyon */
   const b = calcBreakdown(180, 1);
   ok(b.buyerFee === 18 && b.sellerFee === 27 && b.buyerTotal === 198 && b.sellerNet === 153, 'komisyon');
+  const bf = calcBreakdown(180, 2, 'on_delivery');
+  ok(bf.buyerFee === 0 && bf.sellerFee === 0 && bf.buyerTotal === 360 && bf.sellerNet === 360 && bf.platformRevenue === 0, 'teslimatta ödemede komisyon yok');
 
   /* Demo verisi */
   const seed = await createSeed(async (p) => 'h:' + p);
@@ -72,7 +74,8 @@ const reg = (over: Partial<api.RegisterInput> = {}): api.RegisterInput => ({
   ok(seed.verifications.some((v) => v.status === 'pending' && v.kind === 'seller') && seed.verifications.some((v) => v.status === 'pending' && v.kind === 'courier'), 'bekleyen başvurular');
   ok(seed.verifications.filter((v) => v.kind === 'seller').every((v) => !!v.iban && api.normalizeIban(v.iban!) === v.iban), 'demo IBAN geçerli');
   ok(seed.orders.some((o) => o.delivery === 'cargo' && o.trackingCode), 'kargo takipli sipariş');
-  ok(seed.payments.filter((p) => p.status === 'succeeded').length === 3, '3 başarılı test ödemesi');
+  ok(seed.settings.paymentMode === 'offline' && seed.payments.length === 0, 'demo pilot modda: ödeme kaydı yok');
+  ok(seed.orders.every((o) => o.paymentMethod === 'on_delivery' && o.buyerFee === 0 && o.sellerFee === 0), 'demo siparişleri teslimatta ödemeli ve komisyonsuz');
 
   /* Kayıt ve zorunlu onaylar */
   {
@@ -178,9 +181,33 @@ const reg = (over: Partial<api.RegisterInput> = {}): api.RegisterInput => ({
     ok(api.couriersNear(seed, 'İstanbul', 'Kadıköy').length === 0, 'bekleyen demo kurye görünmez');
   }
 
+  /* Pilot mod: teslimatta ödeme */
+  {
+    const db = clone(seed);
+    const baklava = db.listings.find((l) => l.title.startsWith('Antep Fıstıklı'))!;
+    const o = api.createOrder(db, 'u-mehmet', { listingId: baklava.id, quantity: 1, appointment: fut(3), delivery: 'cargo', address: 'Cumhuriyet Mah. Atatürk Cad. No:88, Antakya/Hatay', note: '' });
+    ok(o.paymentMethod === 'on_delivery' && o.buyerTotal === 850 && o.sellerNet === 850, 'pilot sipariş komisyonsuz');
+    ok(!api.availableActions(o, U(db, 'u-mehmet')).includes('complete'), 'onaydan önce tamamlanamaz');
+    api.orderAction(db, U(db, 'u-serkan'), o.id, 'approve');
+    const ao = api.getOrder(db, o.id)!;
+    ok(!api.canPay(ao, U(db, 'u-mehmet')), 'pilot siparişte online ödeme yok');
+    ok(db.notifications.some((n) => n.userId === 'u-mehmet' && n.orderId === o.id && n.body.includes('teslimatta')), 'alıcıya teslimatta ödeme bildirimi');
+    throws(() => api.payWithTestCard(db, 'u-mehmet', o.id, card), 'pilot siparişe kartla ödeme yok', 'ödeme yapılamaz');
+    api.setShipment(db, U(db, 'u-serkan'), o.id, 'Aras Kargo', 'AR555');
+    ok(ao.trackingCode === 'AR555', 'pilotta onaydan sonra kargo bilgisi');
+    ok(api.availableActions(ao, U(db, 'u-mehmet')).includes('complete') && api.availableActions(ao, U(db, 'u-serkan')).includes('complete'), 'alıcı ve satıcı tamamlayabilir');
+    api.orderAction(db, U(db, 'u-mehmet'), o.id, 'complete');
+    ok(ao.status === 'completed' && ao.history.map((h) => h.status).join() === 'seller_pending,approved,completed', 'pilot akış ödeme adımı olmadan tamamlanır');
+    throws(() => api.markPayout(db, U(db, 'u-admin'), [o.id]), 'pilot siparişte satıcıya aktarım yok', 'aktarım yapılmaz');
+    ok(api.payoutSummary(db).length === 0, 'pilotta aktarım listesi boş');
+    const st = api.adminStats(db);
+    ok(st.commission === 0 && st.grossVolume > 0 && st.paymentMode === 'offline', 'pilotta komisyon 0, hacim sayılır');
+  }
+
   /* Sipariş, kargo ve online ödeme */
   {
     const db = clone(seed);
+    db.settings.paymentMode = 'online';
     const baklava = db.listings.find((l) => l.title.startsWith('Antep Fıstıklı'))!;
     const oi = { listingId: baklava.id, quantity: 1, appointment: fut(3), delivery: 'cargo' as const, address: '', note: '' };
     throws(() => api.createOrder(db, 'u-mehmet', oi), 'kargo için adres zorunlu', 'Kargo');
@@ -221,18 +248,25 @@ const reg = (over: Partial<api.RegisterInput> = {}): api.RegisterInput => ({
     ok(api.getOrder(db, o2.id)!.status === 'cancelled', 'ödemeden önce iptal');
   }
 
-  /* Satıcı ödemeleri */
+  /* Satıcı ödemeleri (online modda) */
   {
     const db = clone(seed);
+    ok(api.payoutSummary(db).length === 0, 'pilot demo verisinde aktarım yok');
+    db.settings.paymentMode = 'online';
+    const oruk = db.listings.find((l) => l.title.startsWith('Oruk'))!;
+    const oo = api.createOrder(db, 'u-mehmet', { listingId: oruk.id, quantity: 1, appointment: fut(2), delivery: 'pickup', address: '', note: '' });
+    api.orderAction(db, U(db, 'u-fatma'), oo.id, 'approve');
+    api.payWithTestCard(db, 'u-mehmet', oo.id, card);
+    api.orderAction(db, U(db, 'u-mehmet'), oo.id, 'complete');
     const summary = api.payoutSummary(db);
     ok(summary.length === 1 && summary[0]!.sellerId === 'u-fatma' && summary[0]!.total === 221 && !!summary[0]!.verification?.iban, 'satıcıya aktarılacak tutar ve IBAN');
     const shipped = db.orders.find((o) => o.delivery === 'cargo')!;
-    throws(() => api.markPayout(db, U(db, 'u-admin'), [shipped.id]), 'tamamlanmamış siparişe ödeme yok');
+    throws(() => api.markPayout(db, U(db, 'u-admin'), [shipped.id]), 'pilot/tamamlanmamış siparişe ödeme yok');
     throws(() => api.markPayout(db, U(db, 'u-mehmet'), [summary[0]!.orders[0]!.id]), 'admin olmayan ödeme işaretleyemez');
     api.markPayout(db, U(db, 'u-admin'), summary[0]!.orders.map((o) => o.id));
     ok(api.payoutSummary(db).length === 0 && api.adminStats(db).payoutDue === 0, 'ödeme işaretlendi');
     const s = api.adminStats(seed);
-    ok(s.pendingVerifications === 2 && s.couriers === 1 && s.payoutDueCount === 1, 'admin istatistikleri');
+    ok(s.pendingVerifications === 2 && s.couriers === 1 && s.payoutDueCount === 0 && s.commission === 0, 'admin istatistikleri');
   }
 
   /* Şikayet, engelleme, hesap silme */

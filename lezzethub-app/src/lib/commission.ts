@@ -1,3 +1,5 @@
+import type { PaymentMethod } from './types';
+
 /** Alıcıdan ürün tutarına eklenen hizmet bedeli oranı. */
 export const BUYER_FEE_RATE = 0.1;
 /** Satıcının tutarından düşülen hizmet bedeli oranı. */
@@ -14,10 +16,12 @@ export interface Breakdown {
   platformRevenue: number;
 }
 
-export function calcBreakdown(unitPrice: number, quantity: number): Breakdown {
+/** Teslimatta ödemede (pilot mod) platform para almadığı için hizmet bedeli yoktur. */
+export function calcBreakdown(unitPrice: number, quantity: number, method: PaymentMethod = 'online'): Breakdown {
   const subtotal = round2(unitPrice * quantity);
-  const buyerFee = round2(subtotal * BUYER_FEE_RATE);
-  const sellerFee = round2(subtotal * SELLER_FEE_RATE);
+  const free = method === 'on_delivery';
+  const buyerFee = free ? 0 : round2(subtotal * BUYER_FEE_RATE);
+  const sellerFee = free ? 0 : round2(subtotal * SELLER_FEE_RATE);
   return {
     subtotal,
     buyerFee,

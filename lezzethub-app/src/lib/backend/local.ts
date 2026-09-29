@@ -26,7 +26,7 @@ function migrate(raw: unknown): DB | null {
 }
 
 const emptyDb = (): DB => ({
-  version: DB_VERSION, users: [], listings: [], orders: [], messages: [], payments: [], notifications: [], reports: [], blocks: [], verifications: [], couriers: [],
+  version: DB_VERSION, settings: { paymentMode: 'offline' }, users: [], listings: [], orders: [], messages: [], payments: [], notifications: [], reports: [], blocks: [], verifications: [], couriers: [],
 });
 
 export class LocalBackend implements Backend {

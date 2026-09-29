@@ -117,6 +117,18 @@ export interface Listing {
   updatedAt: string;
 }
 
+/**
+ * Platform ödeme modu. 'offline' (pilot): alıcı teslimatta doğrudan satıcıya öder, komisyon alınmaz,
+ * para platformdan geçmez. 'online': iyzico ile online ödeme ve komisyon (şirket + iyzico hesabı gerekir).
+ */
+export type PaymentMode = 'offline' | 'online';
+/** Siparişin ödeme yöntemi (sipariş oluşturulurken platform moduna göre belirlenir, sonradan değişmez). */
+export type PaymentMethod = 'online' | 'on_delivery';
+
+export interface AppSettings {
+  paymentMode: PaymentMode;
+}
+
 export type OrderStatus = 'seller_pending' | 'approved' | 'paid' | 'completed' | 'rejected' | 'cancelled';
 
 export interface Order {
@@ -131,6 +143,8 @@ export interface Order {
   appointment: string;
   delivery: DeliveryMethod;
   shippingPayer: ShippingPayer;
+  /** 'on_delivery': ödeme teslimatta doğrudan satıcıya (komisyonsuz); 'online': iyzico ile. */
+  paymentMethod: PaymentMethod;
   /** Kurye/kargo teslimatında alıcının adresi. */
   address: string;
   /** Elden teslimde satıcının adresi; satıcı onayladığında doldurulur. */
@@ -265,6 +279,7 @@ export interface CourierProfile {
 
 export interface DB {
   version: number;
+  settings: AppSettings;
   users: User[];
   listings: Listing[];
   orders: Order[];

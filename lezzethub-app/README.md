@@ -2,7 +2,7 @@
 
 Türkiye’nin 81 ilinde ev yemeği satıcılarıyla alıcıları **il + ilçe + mahalle** detayında buluşturan marketplace mobil uygulaması. Öne çıkanlar:
 
-- randevulu sipariş ve **online ödeme** (iyzico)
+- randevulu sipariş; **pilot modda teslimatta ödeme** (şirket gerekmez, komisyonsuz), hazır olunca tek ayarla **online ödeme** (iyzico)
 - teslimat için **elden, kurye veya kargo**; kurye/kargo ücretini alıcı ya da satıcı üstlenir
 - **onaylı kurye rehberi**
 - satıcılar için **zorunlu hijyen belgesi, gıda işletmesi kayıt numarası** ve mevzuat beyanı
@@ -40,10 +40,7 @@ Demo modunda giriş ekranında tek dokunuşla giriş yapılan hesaplar vardır:
 
 Demo verisinde İstanbul, Ankara ve İzmir’den satıcılar, onay bekleyen satıcı/kurye başvuruları ve kargodaki bir sipariş de vardır.
 
-Demo ödemesi test kartıyla yapılır:
-
-- Başarılı ödeme: `4242 4242 4242 4242`
-- Reddedilen ödeme: `4000 0000 0000 0002`
+Demo verisi **pilot moddadır**: siparişlerde ödeme teslimatta yapılır, test kartı gerekmez. (Online modda demo ödemesi `4242 4242 4242 4242` test kartıyla simüle edilir; `4000 0000 0000 0002` reddedilir.)
 
 Demo verisi yalnızca o cihazda tutulur; **Profil → Demo verilerini sıfırla** ile başa dönülür. Önceki (yalnızca Hatay) sürümün demo verisi otomatik olarak yenisiyle değiştirilir.
 
@@ -71,9 +68,28 @@ Canlı modda tüm kullanıcılar aynı veritabanını kullanır: Ayşe’nin ila
    Uygulamayı yeniden başlat (`npx expo start -c`). Giriş ekranındaki demo bölümü kaybolur, "Şifremi unuttum" görünür.
 5. **İlk admini ata:** Uygulamadan normal şekilde kayıt ol. Ardından `supabase/make-admin.sql` içindeki e-postayı kendi adresinle değiştirip SQL Editor’de çalıştır. Diğer adminleri uygulamadaki **Admin → Kullanıcılar** ekranından atayabilirsin.
 
-6. **Online ödemeyi (iyzico) bağla:** bkz. aşağıdaki bölüm.
+6. **(İsteğe bağlı) Online ödeme:** Pilot modda gerekmez. Şirket ve iyzico hazır olunca aşağıdaki bölüme bak.
 
-### Online ödeme: iyzico kurulumu
+### Ödeme modu: pilot (varsayılan) ve online
+
+Uygulama varsayılan olarak **pilot modda** çalışır:
+
+- Ödeme uygulamadan geçmez; alıcı teslimatta doğrudan satıcıya öder (nakit veya IBAN).
+- Hizmet bedeli alınmaz. Sipariş akışı: Satıcı onayı → Onaylandı · Teslimatta ödeme → Tamamlandı.
+- Şirket, iyzico hesabı veya ödeme fonksiyonları **gerekmez**. LezzetHub bu modda yalnızca alıcıyla satıcıyı buluşturan bir ilan platformudur.
+
+**Online ödemeye geçiş** (şirket kurulup iyzico üye işyeri onayı alındıktan sonra):
+
+1. Aşağıdaki iyzico kurulumunu yap.
+2. SQL Editor'de şunu çalıştır:
+   ```sql
+   update public.app_settings set value = 'online' where key = 'payment_mode';
+   ```
+3. Bundan sonra açılan siparişler online ödemeli ve komisyonlu olur. Önceki siparişler teslimatta ödemeli olarak kalır. Uygulamayı yeniden derlemek gerekmez.
+
+Geri dönmek için aynı komutu `'offline'` ile çalıştırman yeterli.
+
+### Online ödeme: iyzico kurulumu (yalnızca online mod için)
 
 Ödeme, iyzico **Ortak Ödeme Sayfası (Checkout Form)** ile alınır. Kart bilgisi uygulamaya hiç girilmez. Sonuç, sunucuda iyzico’dan tekrar sorgulanır ve imzası doğrulanır; sipariş ancak bundan sonra “Ödendi” olur. Kodlar `supabase/functions/` altındadır:
 
@@ -149,7 +165,10 @@ Diğer ayarlar:
 - **Sipariş akışı:** Satıcı Onayı Bekliyor → Ödeme Bekleniyor → Ödendi · Hazırlanıyor → Tamamlandı. Reddetme ve iptal mümkündür.
   - Sipariş verirken **Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi** onayı zorunludur.
   - Admin, ödenmiş bir siparişi iptal edip tutarı karta iade edebilir.
-- **Online ödeme:** Canlı modda iyzico, demo modunda test kartı simülasyonu. Kartın yalnızca son 4 hanesi kaydedilir.
+- **Ödeme:**
+  - **Pilot mod (varsayılan):** teslimatta doğrudan satıcıya ödeme, komisyon yok.
+  - **Online mod:** canlı sürümde iyzico, demo modunda test kartı simülasyonu. Kartın yalnızca son 4 hanesi kaydedilir.
+  - Mod tek bir veritabanı ayarıyla değişir; her sipariş açıldığı andaki yöntemi korur.
 - **Komisyon:** Alıcıdan %10, satıcıdan %15. Hesap dökümü satır satır gösterilir.
 - **Yemek fotoğrafları ve pazarlama:** İlan başına 6 fotoğraf, kamera veya galeri, kapak seçme; bağlantı ve fotoğraf paylaşımı.
 - **Mesajlaşma, şikayet ve engelleme, hesap silme** (mağaza şartları).

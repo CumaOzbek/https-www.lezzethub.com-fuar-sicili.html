@@ -60,6 +60,16 @@ end $$;
 -- Tablolar
 -- ---------------------------------------------------------------------
 
+-- Platform ayarları. payment_mode:
+--   'offline' (varsayılan, pilot): alıcı teslimatta doğrudan satıcıya öder; komisyon alınmaz, para platformdan geçmez.
+--   'online': iyzico ile online ödeme ve komisyon (şirket + iyzico hesabı ve ödeme fonksiyonları gerekir).
+-- Online ödemeye geçmek için: update public.app_settings set value = 'online' where key = 'payment_mode';
+create table if not exists public.app_settings (
+  key text primary key,
+  value text not null
+);
+insert into public.app_settings(key, value) values ('payment_mode', 'offline') on conflict (key) do nothing;
+
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   name text not null check (char_length(btrim(name)) between 3 and 80),
@@ -163,6 +173,8 @@ create table if not exists public.orders (
   appointment timestamptz not null,
   delivery text not null check (delivery in ('pickup','courier','cargo')),
   shipping_payer text not null check (shipping_payer in ('buyer','seller')),
+  -- 'on_delivery': teslimatta doğrudan satıcıya ödeme (komisyonsuz); 'online': iyzico ile.
+  payment_method text not null default 'online' check (payment_method in ('online','on_delivery')),
   address text not null default '',
   pickup_address text,
   shipping_company text,
@@ -256,6 +268,7 @@ alter table public.listings add column if not exists shelf_life text not null de
 alter table public.listings add column if not exists shelf_stable boolean not null default false;
 alter table public.listings add column if not exists safety_confirmed_at timestamptz;
 alter table public.listings add column if not exists under_review boolean not null default false;
+alter table public.orders add column if not exists payment_method text not null default 'online';
 
 -- Kargo yalnızca soğuk zincir gerektirmeyen ürünlerde (eski kayıtlar kontrol edilmez: NOT VALID).
 alter table public.listings drop constraint if exists listings_cargo_shelf_stable;
@@ -264,6 +277,11 @@ alter table public.listings add constraint listings_cargo_shelf_stable check (no
 -- ---------------------------------------------------------------------
 -- Oturum ve bildirim yardımcıları
 -- ---------------------------------------------------------------------
+
+create or replace function public._payment_mode() returns text
+language sql stable security definer set search_path = public as $$
+  select coalesce((select value from app_settings where key = 'payment_mode'), 'offline')
+$$;
 
 create or replace function public.is_admin() returns boolean
 language sql stable security definer set search_path = public as $$
@@ -332,7 +350,9 @@ begin
     history = history || jsonb_build_array(jsonb_build_object('status', p_to, 'at', now(), 'by', p_by, 'note', p_note))
   where id = p_order.id;
   insert into messages(order_id, is_system, text, read)
-  values (p_order.id, true, 'Sipariş durumu: ' || _status_label(p_to) || coalesce(' — ' || nullif(p_note, ''), ''), true);
+  values (p_order.id, true, 'Sipariş durumu: ' ||
+    case when p_to = 'approved' and p_order.payment_method = 'on_delivery' then 'Onaylandı · Teslimatta ödeme' else _status_label(p_to) end ||
+    coalesce(' — ' || nullif(p_note, ''), ''), true);
 end $$;
 
 -- ---------------------------------------------------------------------
@@ -635,6 +655,7 @@ declare
   seller profiles;
   o orders;
   v_sub numeric; v_bfee numeric; v_sfee numeric;
+  v_method text;
   v_code text;
 begin
   select * into l from listings where id = p_listing_id;
@@ -650,17 +671,19 @@ begin
     perform _fail(case when p_delivery = 'cargo' then 'Kargo için açık adresini (mahalle, sokak, no, ilçe/il) girin.' else 'Kurye teslimatı için adres girin.' end);
   end if;
 
+  v_method := case when _payment_mode() = 'online' then 'online' else 'on_delivery' end;
   v_sub := round(l.price * p_quantity, 2);
-  v_bfee := round(v_sub * buyer_fee_rate(), 2);
-  v_sfee := round(v_sub * seller_fee_rate(), 2);
+  -- Teslimatta ödemede (pilot) platform para almadığı için hizmet bedeli yoktur.
+  v_bfee := case when v_method = 'online' then round(v_sub * buyer_fee_rate(), 2) else 0 end;
+  v_sfee := case when v_method = 'online' then round(v_sub * seller_fee_rate(), 2) else 0 end;
   loop
     v_code := 'LH-' || (100000 + floor(random() * 900000))::int::text;
     exit when not exists (select 1 from orders where code = v_code);
   end loop;
 
   insert into orders(code, buyer_id, seller_id, listing_id, listing_title, unit_price, quantity, appointment, delivery, shipping_payer,
-                     address, note, subtotal, buyer_fee, seller_fee, buyer_total, seller_net, history)
-  values (v_code, me.id, l.owner_id, l.id, l.title, l.price, p_quantity, p_appointment, p_delivery, l.shipping_payer,
+                     payment_method, address, note, subtotal, buyer_fee, seller_fee, buyer_total, seller_net, history)
+  values (v_code, me.id, l.owner_id, l.id, l.title, l.price, p_quantity, p_appointment, p_delivery, l.shipping_payer, v_method,
           case when p_delivery = 'pickup' then '' else btrim(p_address) end, btrim(coalesce(p_note, '')),
           v_sub, v_bfee, v_sfee, v_sub + v_bfee, v_sub - v_sfee,
           jsonb_build_array(jsonb_build_object('status', 'seller_pending', 'at', now(), 'by', me.id)))
@@ -693,6 +716,7 @@ begin
       if is_seller then allowed := allowed || array['approve','reject']; end if;
       if is_buyer then allowed := allowed || array['cancel']; end if;
     when 'approved' then
+      if (is_buyer or is_seller) and o.payment_method = 'on_delivery' then allowed := allowed || array['complete']; end if;
       if is_buyer or is_seller then allowed := allowed || array['cancel']; end if;
     when 'paid' then
       if is_buyer or is_seller then allowed := allowed || array['complete']; end if;
@@ -709,7 +733,10 @@ begin
       where id = o.id;
     end if;
     perform _transition(o, 'approved', me.id);
-    perform _notify(o.buyer_id, 'Siparişin onaylandı ✅', v_title || ' satıcı tarafından onaylandı. Online ödemeyi yaparak siparişini kesinleştir.', o.id);
+    perform _notify(o.buyer_id, 'Siparişin onaylandı ✅',
+      case when o.payment_method = 'online'
+        then v_title || ' satıcı tarafından onaylandı. Online ödemeyi yaparak siparişini kesinleştir.'
+        else v_title || ' satıcı tarafından onaylandı. Ödemeyi teslimatta doğrudan satıcıya yapacaksın (' || _tl(o.buyer_total) || ').' end, o.id);
   elsif p_action = 'reject' then
     perform _transition(o, 'rejected', me.id, coalesce(v_note, 'Satıcı siparişi reddetti'));
     perform _notify(o.buyer_id, 'Sipariş reddedildi', v_title || ' satıcı tarafından reddedildi.', o.id);
@@ -735,7 +762,8 @@ begin
   if o.id is null then perform _fail('Sipariş bulunamadı.'); end if;
   if o.seller_id is distinct from me.id then perform _fail('Kargo bilgisini yalnızca satıcı girebilir.'); end if;
   if o.delivery <> 'cargo' then perform _fail('Bu sipariş kargo ile gönderilmiyor.'); end if;
-  if o.status <> 'paid' then perform _fail('Kargo bilgisi ödeme alındıktan sonra girilebilir.'); end if;
+  if o.payment_method = 'online' and o.status <> 'paid' then perform _fail('Kargo bilgisi ödeme alındıktan sonra girilebilir.'); end if;
+  if o.payment_method = 'on_delivery' and o.status <> 'approved' then perform _fail('Kargo bilgisi sipariş onaylandıktan sonra girilebilir.'); end if;
   if char_length(btrim(coalesce(p_company, ''))) < 2 or char_length(btrim(coalesce(p_tracking, ''))) < 4 then
     perform _fail('Kargo firmasını ve takip numarasını girin.');
   end if;
@@ -758,6 +786,7 @@ begin
   select * into o from orders where id = p_order_id;
   if o.id is null then perform _fail('Sipariş bulunamadı.'); end if;
   if o.buyer_id is distinct from p_user then perform _fail('Bu siparişin ödemesini yalnızca alıcı yapabilir.'); end if;
+  if o.payment_method <> 'online' then perform _fail('Bu siparişin ödemesi teslimatta doğrudan satıcıya yapılır.'); end if;
   if o.status <> 'approved' then perform _fail('Bu sipariş için şu anda ödeme yapılamaz.'); end if;
   select * into b from profiles where id = p_user;
   if not b.active then perform _fail('Hesabın pasif durumda.'); end if;
@@ -994,6 +1023,7 @@ language plpgsql security definer set search_path = public as $$
 declare me profiles := _require_admin(); o orders;
 begin
   for o in select * from orders where id = any (p_order_ids) for update loop
+    if o.payment_method <> 'online' then perform _fail('Teslimatta ödenen siparişlerde satıcıya aktarım yapılmaz.'); end if;
     if o.status <> 'completed' then perform _fail('Yalnızca tamamlanan siparişler için satıcıya ödeme yapılır.'); end if;
     if o.payout_status = 'paid' then continue; end if;
     update orders set payout_status = 'paid', payout_at = now() where id = o.id;
@@ -1005,6 +1035,7 @@ end $$;
 -- Yetkiler ve satır düzeyi güvenlik
 -- ---------------------------------------------------------------------
 
+alter table public.app_settings enable row level security;
 alter table public.tr_districts enable row level security;
 alter table public.profiles enable row level security;
 alter table public.profile_private enable row level security;
@@ -1018,12 +1049,15 @@ alter table public.notifications enable row level security;
 alter table public.reports enable row level security;
 alter table public.blocks enable row level security;
 
-revoke all on public.tr_districts, public.profiles, public.profile_private, public.verifications, public.courier_profiles,
+revoke all on public.app_settings, public.tr_districts, public.profiles, public.profile_private, public.verifications, public.courier_profiles,
   public.listings, public.orders, public.messages, public.payments, public.notifications, public.reports, public.blocks
   from anon, authenticated;
-grant select on public.tr_districts, public.profiles, public.listings to anon, authenticated;
+grant select on public.app_settings, public.tr_districts, public.profiles, public.listings to anon, authenticated;
 grant select on public.profile_private, public.verifications, public.courier_profiles, public.orders, public.messages,
   public.payments, public.notifications, public.reports, public.blocks to authenticated;
+
+drop policy if exists settings_read on public.app_settings;
+create policy settings_read on public.app_settings for select using (true);
 
 drop policy if exists districts_read on public.tr_districts;
 create policy districts_read on public.tr_districts for select using (true);
