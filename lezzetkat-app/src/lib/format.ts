@@ -65,7 +65,7 @@ export function shippingPayerText(method: DeliveryMethod, payer: ShippingPayer) 
   const what = method === 'cargo' ? 'Kargo' : 'Kurye';
   return payer === 'seller'
     ? `${what} ücretini ve gönderimi satıcı üstlenir; alıcı ek ücret ödemez.`
-    : `${what} ücretini alıcı öder; ücret online ödemeye dahil değildir ve ${method === 'cargo' ? 'kargo firmasına' : 'kuryeye'} ödenir.`;
+    : `${what} ücretini alıcı öder; ücret ürün bedeline dahil değildir ve doğrudan ${method === 'cargo' ? 'kargo firmasına' : 'kuryeye'} ödenir.`;
 }
 
 export const LICENSE_LABEL: Record<LicenseClass, string> = {

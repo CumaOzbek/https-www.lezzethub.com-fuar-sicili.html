@@ -262,7 +262,7 @@ export default function ListingDetail() {
           ) : (
             <Row gap={12}>
               <View>
-                <Text style={font.tiny}>Hizmet bedeli dahil</Text>
+                <Text style={font.tiny}>{db.settings.paymentMode === 'online' ? 'Hizmet bedeli dahil' : 'Teslimatta ödenir'}</Text>
                 <Text style={{ fontWeight: '900', fontSize: 18, color: colors.ink }}>{tl(buyerPrice)}</Text>
               </View>
               <Button

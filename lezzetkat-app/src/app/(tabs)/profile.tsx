@@ -221,6 +221,7 @@ export default function Profile() {
         <LinkRow icon="shield-checkmark-outline" label="KVKK Aydınlatma Metni" onPress={() => router.push('/legal/privacy')} />
         <LinkRow icon="hand-right-outline" label="Açık Rıza Metni" onPress={() => router.push('/legal/consent')} />
         <LinkRow icon="receipt-outline" label="Mesafeli Satış Sözleşmesi" onPress={() => router.push('/legal/sales')} />
+        <LinkRow icon="document-lock-outline" label="Hesap ve veri silme" onPress={() => router.push('/legal/delete')} />
         <LinkRow icon="mail-outline" label={`Destek: ${SUPPORT_EMAIL}`} onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)} />
         <LinkRow icon="log-out-outline" label="Çıkış Yap" onPress={doLogout} />
         <LinkRow icon="trash-outline" label="Hesabımı Sil" onPress={doDelete} danger />

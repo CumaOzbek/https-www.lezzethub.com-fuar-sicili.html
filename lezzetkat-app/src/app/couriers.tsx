@@ -52,7 +52,7 @@ export default function Couriers() {
         <Notice
           tone="honey"
           icon="information-circle-outline"
-          text="Kuryeler bağımsızdır; ücret ve teslim saatini kuryeyle doğrudan konuşun. Kurye ücreti online ödemeye dahil değildir. Tüm kuryelerin A2/B ehliyeti LezzetKAT tarafından kontrol edilmiştir."
+          text="Kuryeler bağımsızdır; ücret ve teslim saatini kuryeyle doğrudan konuşun. Kurye ücreti ürün bedeline dahil değildir. Tüm kuryelerin A2/B ehliyeti LezzetKAT tarafından kontrol edilmiştir."
         />
       </View>
       {list.length === 0 ? (

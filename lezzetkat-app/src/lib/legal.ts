@@ -10,7 +10,7 @@ export interface LegalDoc {
   sections: { heading: string; body: string }[];
 }
 
-export type LegalKey = 'privacy' | 'consent' | 'terms' | 'seller' | 'courier' | 'sales' | 'food';
+export type LegalKey = 'privacy' | 'consent' | 'terms' | 'seller' | 'courier' | 'sales' | 'food' | 'delete';
 
 const ALLERGEN_LIST = ALLERGENS.map((a) => '• ' + a.label).join('\n');
 const PROHIBITED_LIST = PROHIBITED_FOODS.map((p) => '• ' + p).join('\n');
@@ -271,6 +271,35 @@ export const LEGAL_DOCS: Record<LegalKey, LegalDoc> = {
         heading: '5. Hijyen şikayetleri',
         body:
           'Ürünü satın almış bir alıcıdan veya iki farklı kullanıcıdan hijyen / gıda güvenliği şikayeti gelen ilan, inceleme bitene kadar otomatik olarak yayından kaldırılır; satıcı ilanı kendisi yeniden açamaz. Yönetici 24 saat içinde inceler. Gıda zehirlenmesi şüphesinde alıcıların sağlık kuruluşuna başvurması ve ALO 174 Gıda Hattı’na bildirmesi önerilir.',
+      },
+    ],
+  },
+  delete: {
+    title: 'Hesap ve Veri Silme',
+    updated: UPDATED,
+    sections: [
+      {
+        heading: '1. Uygulama içinden silme (en hızlı yol)',
+        body:
+          'LezzetKAT uygulamasında Profil → Hesabımı Sil adımını izleyin ve onaylayın. Hesabınız ve aşağıda belirtilen verileriniz hemen silinir. Devam eden (onay bekleyen veya teslim edilmemiş) siparişiniz varsa, önce bunları tamamlamanız veya iptal etmeniz gerekir.',
+      },
+      {
+        heading: '2. Uygulamaya erişemiyorsanız',
+        body: `Kayıtlı e-posta adresinizden ${SUPPORT_EMAIL} adresine “Hesap silme talebi” konulu bir e-posta gönderin. Kimliğiniz doğrulandıktan sonra hesabınız en geç 30 gün içinde silinir ve size bilgi verilir.`,
+      },
+      {
+        heading: '3. Silinen veriler',
+        body:
+          '• Profil bilgileri (ad, e-posta, telefon, adres, konum, fotoğraf)\n' +
+          '• İlanlarınız ve ilan fotoğraflarınız\n' +
+          '• Bildirimleriniz, engelleme ve şikayet kayıtlarınız\n' +
+          '• Satıcı/kurye başvurularınız, hijyen belgesi ve ehliyet görüntüleri, IBAN bilgisi\n' +
+          '• Kurye profiliniz',
+      },
+      {
+        heading: '4. Saklanan veriler',
+        body:
+          'Karşı tarafın kayıtlarında bulunan geçmiş siparişler ve bu siparişlere ait mesajlar, kimliğiniz kaldırılarak (“Silinmiş kullanıcı” olarak) saklanabilir. Yasal yükümlülükler (ör. ticari kayıtlar, olası uyuşmazlıklar) nedeniyle saklanması gereken işlem kayıtları mevzuattaki süreler boyunca tutulur ve süre sonunda silinir veya anonimleştirilir.',
       },
     ],
   },
